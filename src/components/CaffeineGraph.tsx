@@ -16,7 +16,8 @@ export interface GraphInspection {
 export interface CaffeineGraphProps {
   series: GraphSeries[];
   bedtime: Date;
-  referenceLineMgPerL: number;
+  referenceLineMgPerL?: number;
+  thresholdMgPerL?: number;
   onInspect?: (inspection: GraphInspection) => void;
 }
 
@@ -26,8 +27,9 @@ const padding = { top: 24, right: 34, bottom: 42, left: 58 };
 const plotWidth = width - padding.left - padding.right;
 const plotHeight = height - padding.top - padding.bottom;
 
-export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, onInspect }: CaffeineGraphProps) {
-  const chart = useMemo(() => buildChartModel(series, bedtime, referenceLineMgPerL), [series, bedtime, referenceLineMgPerL]);
+export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, thresholdMgPerL, onInspect }: CaffeineGraphProps) {
+  const referenceLine = referenceLineMgPerL ?? thresholdMgPerL ?? 0.7;
+  const chart = useMemo(() => buildChartModel(series, bedtime, referenceLine), [series, bedtime, referenceLine]);
   const [inspection, setInspection] = useState<GraphInspection>(() => ({ index: 0, elapsedMinutes: chart.elapsedDomain[0] }));
   const inspected = useMemo(() => inspectSeriesAt(series, inspection.index), [series, inspection.index]);
 
@@ -87,7 +89,7 @@ export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, onInspect 
         ))}
 
         <line x1={padding.left} x2={width - padding.right} y1={chart.thresholdY} y2={chart.thresholdY} className="threshold-line" />
-        <text x={width - padding.right} y={chart.thresholdY - 8} textAnchor="end" className="marker-label">reference line {referenceLineMgPerL.toFixed(1)} mg/L</text>
+        <text x={width - padding.right} y={chart.thresholdY - 8} textAnchor="end" className="marker-label">reference line {referenceLine.toFixed(1)} mg/L</text>
 
         <line x1={chart.bedtimeX} x2={chart.bedtimeX} y1={padding.top} y2={height - padding.bottom} className="bedtime-line" />
         <text x={chart.bedtimeX - 8} y={padding.top + 16} textAnchor="end" className="marker-label">bedtime</text>

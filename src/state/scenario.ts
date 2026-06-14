@@ -65,6 +65,9 @@ export function migrateScenarioState(value: unknown, now = new Date()): AppScena
   if (record.schemaVersion === 2 || record.version === 2) {
     return normalizeV2State(record, now);
   }
+  if ((record.schemaVersion !== undefined && record.schemaVersion !== 1) || (record.version !== undefined && record.version !== 1)) {
+    throw new Error('Unsupported scenario state version');
+  }
 
   if ('profile' in record && 'intakes' in record) {
     return migrateV1State(record as LegacyAppScenarioState, now);
@@ -89,16 +92,22 @@ export function getScenarioState(state: AppScenarioState, scenarioId: string): S
 
 export function addCatalogIntake(
   state: AppScenarioState,
-  scenarioId: string,
-  catalogId: string,
-  consumedAt: Date,
+  scenarioIdOrCatalogId: string,
+  catalogIdOrConsumedAt: string | Date,
+  consumedAtOrOverride?: Date | number,
   caffeineOverrideMg?: number,
 ): AppScenarioState {
+  const legacyCall = catalogIdOrConsumedAt instanceof Date;
+  const scenarioId = legacyCall ? 'scenario-1' : scenarioIdOrCatalogId;
+  const catalogId = legacyCall ? scenarioIdOrCatalogId : catalogIdOrConsumedAt;
+  const consumedAt = legacyCall ? catalogIdOrConsumedAt : consumedAtOrOverride;
+  const override = legacyCall ? consumedAtOrOverride : caffeineOverrideMg;
+  if (!(consumedAt instanceof Date)) throw new Error('consumedAt is required');
   const product = findCatalogItem(catalogId);
   if (!product) throw new Error(`Unknown catalog item: ${catalogId}`);
 
   const intake = coffeeProductToIntake(
-    caffeineOverrideMg ? { ...product, caffeineMg: caffeineOverrideMg } : product,
+    typeof override === 'number' && override > 0 ? { ...product, caffeineMg: override } : product,
     consumedAt,
     `${scenarioId}-${catalogId}-${consumedAt.getTime()}`,
   );
@@ -108,11 +117,17 @@ export function addCatalogIntake(
 
 export function addManualIntake(
   state: AppScenarioState,
-  scenarioId: string,
-  label: string,
-  caffeineMg: number,
-  consumedAt: Date,
+  scenarioIdOrLabel: string,
+  labelOrCaffeineMg: string | number,
+  caffeineMgOrConsumedAt: number | Date,
+  consumedAtMaybe?: Date,
 ): AppScenarioState {
+  const legacyCall = typeof labelOrCaffeineMg === 'number';
+  const scenarioId = legacyCall ? 'scenario-1' : scenarioIdOrLabel;
+  const label = legacyCall ? scenarioIdOrLabel : labelOrCaffeineMg;
+  const caffeineMg = legacyCall ? labelOrCaffeineMg : caffeineMgOrConsumedAt;
+  const consumedAt = legacyCall ? caffeineMgOrConsumedAt : consumedAtMaybe;
+  if (typeof caffeineMg !== 'number' || !(consumedAt instanceof Date)) throw new Error('Manual caffeine and consumedAt are required');
   return appendIntake(
     state,
     scenarioId,
