@@ -52,14 +52,11 @@ export function App() {
     return { state: stored.state, notice: stored.ok ? '' : `Local data reset: ${stored.error}` };
   }, []);
 
-  const [scenarioStates, setScenarioStates] = useState<[AppScenarioState, AppScenarioState]>(() => [
-    initialLoad.state,
-    createDefaultScenarioState(),
-  ]);
+  const [state, setState] = useState<AppScenarioState>(initialLoad.state);
   const [selectedScenarioIndex, setSelectedScenarioIndex] = useState<0 | 1>(0);
   const [notice, setNotice] = useState(initialLoad.notice);
   const [catalogId, setCatalogId] = useState(VERTUO_SEED_CATALOG[0].id);
-  const [targetScenarioId, setTargetScenarioId] = useState('scenario-2');
+  const [targetScenarioId, setTargetScenarioId] = useState('scenario-1');
   const [caffeineOverrideMg, setCaffeineOverrideMg] = useState('');
   const [manualLabel, setManualLabel] = useState('My coffee');
   const [manualMg, setManualMg] = useState('120');
@@ -68,16 +65,21 @@ export function App() {
   const [weightDraft, setWeightDraft] = useState(String(initialLoad.state.profile.weightKg));
 
   useEffect(() => {
-    saveScenarioState(scenarioStates[0]);
-  }, [scenarioStates]);
+    saveScenarioState(state);
+  }, [state]);
 
   useEffect(() => {
     setWeightDraft(String(state.profile.weightKg));
   }, [state.profile.weightKg]);
 
+  const selectedScenarioLabel = state.scenarios[selectedScenarioIndex]?.name ?? `Scenario ${selectedScenarioIndex + 1}`;
+  const targetScenarioName = getScenarioState(state, targetScenarioId).name;
   const selectedCoffee = findCatalogItem(catalogId);
   const scenarioModels = useMemo(() => state.scenarios.map((scenario) => toScenario(state, scenario.id)), [state]);
-  const allIntakeDates = state.scenarios.flatMap((scenario) => scenario.intakes.map((intake) => new Date(intake.consumedAt).getTime()));
+  const allIntakeDates = useMemo(
+    () => state.scenarios.flatMap((scenario) => scenario.intakes.map((intake) => new Date(intake.consumedAt).getTime())),
+    [state.scenarios],
+  );
   const startAt = useMemo(() => allIntakeDates.length ? new Date(Math.min(...allIntakeDates)) : new Date(), [allIntakeDates]);
   const endAt = useMemo(() => new Date(startAt.getTime() + 36 * 60 * 60_000), [startAt]);
   const referenceLine = state.sleep.referenceLineMgPerL ?? 0.7;
@@ -112,18 +114,13 @@ export function App() {
   }
 
   function updateSelectedScenario(updater: (current: AppScenarioState) => AppScenarioState) {
-    setScenarioStates((current) => {
-      const next = [...current] as [AppScenarioState, AppScenarioState];
-      next[selectedScenarioIndex] = updater(current[selectedScenarioIndex]);
-      return next;
-    });
+    setState((current) => updater(current));
   }
 
   function handleAddCatalog() {
     const override = parsePositiveNumber(caffeineOverrideMg);
     setState((current) => addCatalogIntake(current, targetScenarioId, catalogId, fromLocalInputValue(consumedAt), override));
-    const targetName = getScenarioState(state, targetScenarioId).name;
-    setNotice(`${selectedCoffee?.name ?? 'Coffee'} added to ${targetName}. Manual caffeine overrides remain local-first.`);
+    setNotice(`${selectedCoffee?.name ?? 'Coffee'} added to ${targetScenarioName}. Manual caffeine overrides remain local-first.`);
   }
 
   function handleAddManual() {
@@ -133,13 +130,13 @@ export function App() {
       return;
     }
     setState((current) => addManualIntake(current, targetScenarioId, manualLabel, caffeineMg, fromLocalInputValue(consumedAt)));
-    setNotice(`Manual caffeine entry added to ${getScenarioState(state, targetScenarioId).name}.`);
+    setNotice(`Manual caffeine entry added to ${targetScenarioName}.`);
   }
 
   function handleShare() {
     let nextShareUrl: string;
     try {
-      nextShareUrl = createShareUrl(selectedState);
+      nextShareUrl = createShareUrl(state);
     } catch (error) {
       setNotice(error instanceof Error ? `Share link could not be created: ${error.message}` : 'Share link could not be created.');
       return;
@@ -191,7 +188,10 @@ export function App() {
                 type="radio"
                 name="selected-scenario"
                 checked={selectedScenarioIndex === 0}
-                onChange={() => setSelectedScenarioIndex(0)}
+                onChange={() => {
+                  setSelectedScenarioIndex(0);
+                  setTargetScenarioId('scenario-1');
+                }}
               />
               Scenario 1
             </label>
@@ -200,7 +200,10 @@ export function App() {
                 type="radio"
                 name="selected-scenario"
                 checked={selectedScenarioIndex === 1}
-                onChange={() => setSelectedScenarioIndex(1)}
+                onChange={() => {
+                  setSelectedScenarioIndex(1);
+                  setTargetScenarioId('scenario-2');
+                }}
               />
               Scenario 2
             </label>
@@ -222,8 +225,8 @@ export function App() {
           <label>
             Sensitivity
             <select
-              value={selectedState.profile.sensitivity ?? 'typical'}
-              onChange={(event) => updateSelectedScenario((current) => updateProfile(current, { sensitivity: event.target.value as AppScenarioState['profile']['sensitivity'] }))}
+              value={state.profile.sensitivity ?? 'typical'}
+              onChange={(event) => setState((current) => updateProfile(current, { sensitivity: event.target.value as AppScenarioState['profile']['sensitivity'] }))}
             >
               <option value="low">Low</option>
               <option value="typical">Typical</option>
@@ -233,8 +236,8 @@ export function App() {
           <label>
             Smoking flag (local only)
             <select
-              value={selectedState.profile.smokingStatus ?? 'non-smoker'}
-              onChange={(event) => updateSelectedScenario((current) => updateProfile(current, { smokingStatus: event.target.value as AppScenarioState['profile']['smokingStatus'] }))}
+              value={state.profile.smokingStatus ?? 'non-smoker'}
+              onChange={(event) => setState((current) => updateProfile(current, { smokingStatus: event.target.value as AppScenarioState['profile']['smokingStatus'] }))}
             >
               <option value="non-smoker">Non-smoker</option>
               <option value="smoker">Smoker</option>
@@ -243,16 +246,16 @@ export function App() {
           <label className="checkbox-line">
             <input
               type="checkbox"
-              checked={Boolean(selectedState.profile.takesOralContraceptives)}
-              onChange={(event) => updateSelectedScenario((current) => updateProfile(current, { takesOralContraceptives: event.target.checked }))}
+              checked={Boolean(state.profile.takesOralContraceptives)}
+              onChange={(event) => setState((current) => updateProfile(current, { takesOralContraceptives: event.target.checked }))}
             />
             Oral contraceptive flag (local only)
           </label>
           <label>
             Pregnancy/postpartum flag (local only)
             <select
-              value={selectedState.profile.pregnancyStatus ?? 'not-pregnant'}
-              onChange={(event) => updateSelectedScenario((current) => updateProfile(current, { pregnancyStatus: event.target.value as AppScenarioState['profile']['pregnancyStatus'] }))}
+              value={state.profile.pregnancyStatus ?? 'not-pregnant'}
+              onChange={(event) => setState((current) => updateProfile(current, { pregnancyStatus: event.target.value as AppScenarioState['profile']['pregnancyStatus'] }))}
             >
               <option value="not-pregnant">Not pregnant</option>
               <option value="pregnant-or-postpartum">Pregnant/postpartum</option>
@@ -262,7 +265,7 @@ export function App() {
         </form>
 
         <form className="foundation-card control-panel" onSubmit={(event) => event.preventDefault()}>
-          <h2>Add coffee to {selectedScenarioLabel}</h2>
+          <h2>Add coffee to {targetScenarioName}</h2>
           <label>
             Add to scenario
             <select value={targetScenarioId} onChange={(event) => setTargetScenarioId(event.target.value)}>
@@ -297,14 +300,6 @@ export function App() {
               value={caffeineOverrideMg}
               onChange={(event) => setCaffeineOverrideMg(event.target.value)}
             />
-          </label>
-          <label className="checkbox-line">
-            <input
-              type="checkbox"
-              checked={showCandidatePreview}
-              onChange={(event) => setShowCandidatePreview(event.target.checked)}
-            />
-            Preview selected coffee on graph before adding
           </label>
           <button type="button" onClick={handleAddCatalog}>Add selected Vertuo</button>
 
@@ -350,7 +345,7 @@ export function App() {
           ))}
           <label className="inline-control">
             Bedtime marker
-            <input type="datetime-local" value={toLocalInputValue(new Date(selectedState.sleep.bedtime))} onChange={(event) => updateSelectedScenario((current) => updateSleepSettings(current, { bedtime: fromLocalInputValue(event.target.value).toISOString() }))} />
+            <input type="datetime-local" value={toLocalInputValue(new Date(state.sleep.bedtime))} onChange={(event) => updateSelectedScenario((current) => updateSleepSettings(current, { bedtime: fromLocalInputValue(event.target.value).toISOString() }))} />
           </label>
           <label className="inline-control">
             Custom reference line (mg/L)
