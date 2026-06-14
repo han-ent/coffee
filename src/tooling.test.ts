@@ -10,6 +10,8 @@ describe('baseline tooling contract', () => {
 
   it('uses a relative local base path so GitHub Pages subpaths can be configured by env', () => {
     const config = typeof viteConfig === 'function' ? viteConfig({ command: 'build', mode: 'test' }) : viteConfig;
-    expect(config.base).toBe('./');
+    const repository = process.env.GITHUB_REPOSITORY?.split('/').at(1);
+    const expectedBase = repository ? `/${repository}/` : './';
+    expect(config.base).toBe(expectedBase);
   });
 });
