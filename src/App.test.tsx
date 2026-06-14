@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { App } from './App';
 
 describe('App shell', () => {
-  it('renders the G003 planner surface with privacy and manual-entry affordances', () => {
+  it('renders the G001/G002 planner surface with privacy and explicit scenario affordances', () => {
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: /plan coffee timing/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /compare coffee timing/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /balanced profile/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /add coffee/i })).toBeInTheDocument();
     expect(screen.getByText(/share links include only calculation essentials/i)).toBeInTheDocument();
@@ -23,8 +23,7 @@ describe('App shell', () => {
     expect(screen.getAllByText(/bedtime/i).length).toBeGreaterThan(0);
   });
 
-
-  it('adds new intakes only to the selected scenario intake UI while keeping both graph series visible', () => {
+  it('adds new intakes only to the selected scenario while keeping both graph series visible', () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('radio', { name: /scenario 2/i }));
@@ -33,30 +32,15 @@ describe('App shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /add manual coffee/i }));
 
     expect(screen.getByRole('status')).toHaveTextContent(/added to Scenario 2/i);
-    const summary = screen.getByRole('region', { name: /scenario summary/i });
-    expect(within(summary).getByRole('heading', { name: /Scenario 2/i })).toBeInTheDocument();
-    expect(within(summary).getByText('Scenario two espresso')).toBeInTheDocument();
-    expect(within(summary).getByText('95 mg')).toBeInTheDocument();
+    const scenarioOne = screen.getByRole('region', { name: 'Scenario 1' });
+    const scenarioTwo = screen.getByRole('region', { name: 'Scenario 2' });
+    expect(within(scenarioOne).queryByText('Scenario two espresso')).not.toBeInTheDocument();
+    expect(within(scenarioTwo).getByText('Scenario two espresso')).toBeInTheDocument();
+    expect(within(scenarioTwo).getByText('95 mg')).toBeInTheDocument();
     expect(screen.getByText(/Add coffee to Scenario 2/i)).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole('radio', { name: /scenario 1/i }));
-    expect(within(summary).queryByText('Scenario two espresso')).not.toBeInTheDocument();
-  });
-
-
-  it('does not turn selected catalog drafts or override drafts into graph series before adding coffee', () => {
-    render(<App />);
-
-    fireEvent.change(screen.getByLabelText(/Vertuo seed catalog/i), { target: { value: 'vertuo-intenso' } });
-    fireEvent.change(screen.getByLabelText(/Override caffeine \(mg\)/i), { target: { value: '333' } });
-
-    expect(screen.getByText(/^Scenario 1:/)).toBeInTheDocument();
-    expect(screen.getByText(/^Scenario 2:/)).toBeInTheDocument();
-    expect(screen.queryByText((content) => content.startsWith('With '))).not.toBeInTheDocument();
-    expect(screen.getAllByLabelText(/uncertainty band/i)).toHaveLength(2);
   });
 
   it('guards out-of-range weight edits instead of crashing the simulation render', () => {
@@ -64,20 +48,23 @@ describe('App shell', () => {
 
     const weightInput = screen.getByLabelText(/Weight \(kg\)/i);
     fireEvent.change(weightInput, { target: { value: '251' } });
+    fireEvent.blur(weightInput);
 
     expect(screen.getByRole('status')).toHaveTextContent(/between 25 and 250 kg/i);
     expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
   });
 
-  it('keeps the selected-coffee comparison preview off until explicitly enabled', () => {
+  it('does not change graph series when editing the selected-product draft', () => {
     render(<App />);
 
-    expect(screen.getByText('Current plan')).toBeInTheDocument();
+    expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/With Melozio Boost/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/Preview selected coffee on graph before adding/i));
+    fireEvent.change(screen.getByLabelText(/Override caffeine \(mg\)/i), { target: { value: '150' } });
 
-    expect(screen.getAllByText(/With Melozio Boost/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/With Melozio Boost/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);
   });
-
 });

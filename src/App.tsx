@@ -75,7 +75,6 @@ export function App() {
     setWeightDraft(String(state.profile.weightKg));
   }, [state.profile.weightKg]);
 
-  const selectedScenarioLabel = state.scenarios[selectedScenarioIndex]?.name ?? `Scenario ${selectedScenarioIndex + 1}`;
   const targetScenarioName = getScenarioState(state, targetScenarioId).name;
   const selectedCoffee = findCatalogItem(catalogId);
   const scenarioModels = useMemo(() => state.scenarios.map((scenario) => toScenario(state, scenario.id)), [state]);

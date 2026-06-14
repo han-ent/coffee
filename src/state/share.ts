@@ -203,9 +203,10 @@ function assertSharePayload(payload: SharedScenarioPayload) {
 }
 
 function assertSleep(sleep: SleepSettings | (SleepSettings & { thresholdMgPerL?: number })) {
-  if (!sleep) sleep = createDefaultSleepSettings();
-  if (!isValidDateString(sleep.bedtime)) throw new Error('Invalid bedtime');
-  const reference = sleep.referenceLineMgPerL ?? sleep.thresholdMgPerL;
+  const checkedSleep = sleep ?? createDefaultSleepSettings();
+  if (!isValidDateString(checkedSleep.bedtime)) throw new Error('Invalid bedtime');
+  const legacyThreshold = 'thresholdMgPerL' in checkedSleep ? checkedSleep.thresholdMgPerL : undefined;
+  const reference = checkedSleep.referenceLineMgPerL ?? legacyThreshold;
   if (reference !== undefined) assertFiniteRange(reference, 0.05, 10, 'referenceLineMgPerL');
 }
 

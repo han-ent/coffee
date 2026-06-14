@@ -57,7 +57,7 @@ describe('local scenario persistence', () => {
   });
 
   it('recovers to defaults when stored schema or profile ranges are invalid', () => {
-    const invalidVersion = loadScenarioState(memoryStorage(JSON.stringify({ version: 999, profile: { weightKg: 70 }, intakes: [] })));
+    const invalidVersion = loadScenarioState(memoryStorage(JSON.stringify({ version: 999, scenarios: [], profile: { weightKg: 70 } })));
     const invalidWeight = loadScenarioState(memoryStorage(JSON.stringify({ version: 1, profile: { weightKg: 251 }, intakes: [] })));
     const invalidIntake = loadScenarioState(memoryStorage(JSON.stringify({ version: 1, profile: { weightKg: 70 }, intakes: [{ caffeineMg: 100, consumedAt: 'bad-date' }] })));
 
