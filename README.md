@@ -1,15 +1,16 @@
 # Caffeine PK Explorer
 
-Static Vite + React + TypeScript app for planning coffee timing with transparent caffeine pharmacokinetic estimates.
+Static Vite + React + TypeScript app for comparing coffee timing scenarios with transparent caffeine pharmacokinetic estimates.
 
 Current implementation includes:
 
 - Pure caffeine PK engine with first-order absorption/elimination, profile modifiers, uncertainty bands, and non-medical disclaimer copy.
-- Focused Nespresso Vertuo seed catalog plus manual caffeine entry and per-drink override.
-- Balanced local profile state, local persistence, sanitized URL share links, malformed-link recovery, and privacy exclusions for sensitive profile flags.
+- Explicit Scenario 1 / Scenario 2 comparison graph backed by versioned v2 app state.
+- Focused Nespresso Vertuo seed catalog plus scenario-targeted manual caffeine entry and per-drink override.
+- Balanced local profile state, local persistence, sanitized URL share links, malformed-link recovery, and privacy exclusions for sensitive profile flags. Legacy v1 localStorage/share payloads migrate into Scenario 1 plus a Scenario 2 comparison copy.
 - GitHub Pages deployment workflow and baseline quality gates.
 
-This is an educational planning tool, not medical advice. Capsule caffeine values vary by market, batch, recipe, and source; use manual overrides when your sleeve or Nespresso product page provides a better value.
+This is an educational planning tool, not medical advice. Capsule caffeine values vary by market, batch, recipe, and source; use manual overrides when your sleeve or Nespresso product page provides a better value. The graph reference line is a user planning marker, not a universal safety threshold.
 
 ## Coffee seed sources
 
