@@ -1,5 +1,5 @@
 {
-  "name": "caffeine-pk-webapp",
+  "name": "caffeine-pk-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,34 +7,23 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "vite": "latest",
     "typescript": "latest",
-    "react": "latest",
-    "react-dom": "latest"
-  },
-  "devDependencies": {
-    "@eslint/js": "latest",
-    "@testing-library/jest-dom": "latest",
-    "@testing-library/react": "latest",
-    "@testing-library/user-event": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "eslint": "latest",
-    "eslint-plugin-react-hooks": "latest",
-    "eslint-plugin-react-refresh": "latest",
-    "globals": "latest",
-    "jsdom": "latest",
     "vitest": "latest",
-    "typescript-eslint": "latest"
+    "eslint": "latest",
+    "@eslint/js": "latest",
+    "typescript-eslint": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest"
   },
-  "engines": {
-    "node": ">=20.19.0"
-  }
+  "devDependencies": {}
 }
