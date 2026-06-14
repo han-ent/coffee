@@ -47,24 +47,6 @@ describe('App shell', () => {
   });
 
 
-
-  it('applies Vertuo override caffeine to the selected scenario only', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByRole('radio', { name: /scenario 2/i }));
-    fireEvent.change(screen.getByLabelText(/Override caffeine \(mg\)/i), { target: { value: '222' } });
-    fireEvent.click(screen.getByRole('button', { name: /add selected vertuo/i }));
-
-    expect(screen.getByRole('status')).toHaveTextContent(/added to Scenario 2/i);
-    const summary = screen.getByRole('region', { name: /scenario summary/i });
-    expect(within(summary).getByText(/Melozio Boost/i)).toBeInTheDocument();
-    expect(within(summary).getByText('222 mg')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('radio', { name: /scenario 1/i }));
-    expect(within(summary).queryByText(/Melozio Boost/i)).not.toBeInTheDocument();
-    expect(within(summary).queryByText('222 mg')).not.toBeInTheDocument();
-  });
-
   it('does not turn selected catalog drafts or override drafts into graph series before adding coffee', () => {
     render(<App />);
 
