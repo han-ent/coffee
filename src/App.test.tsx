@@ -45,6 +45,19 @@ describe('App shell', () => {
     expect(within(summary).queryByText('Scenario two espresso')).not.toBeInTheDocument();
   });
 
+
+  it('does not turn selected catalog drafts or override drafts into graph series before adding coffee', () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/Vertuo seed catalog/i), { target: { value: 'vertuo-intenso' } });
+    fireEvent.change(screen.getByLabelText(/Override caffeine \(mg\)/i), { target: { value: '333' } });
+
+    expect(screen.getByText(/^Scenario 1:/)).toBeInTheDocument();
+    expect(screen.getByText(/^Scenario 2:/)).toBeInTheDocument();
+    expect(screen.queryByText((content) => content.startsWith('With '))).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText(/uncertainty band/i)).toHaveLength(2);
+  });
+
   it('guards out-of-range weight edits instead of crashing the simulation render', () => {
     render(<App />);
 
