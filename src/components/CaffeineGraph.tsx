@@ -16,7 +16,7 @@ export interface GraphInspection {
 export interface CaffeineGraphProps {
   series: GraphSeries[];
   bedtime: Date;
-  thresholdMgPerL: number;
+  referenceLineMgPerL: number;
   onInspect?: (inspection: GraphInspection) => void;
 }
 
@@ -26,8 +26,8 @@ const padding = { top: 24, right: 34, bottom: 42, left: 58 };
 const plotWidth = width - padding.left - padding.right;
 const plotHeight = height - padding.top - padding.bottom;
 
-export function CaffeineGraph({ series, bedtime, thresholdMgPerL, onInspect }: CaffeineGraphProps) {
-  const chart = useMemo(() => buildChartModel(series, bedtime, thresholdMgPerL), [series, bedtime, thresholdMgPerL]);
+export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, onInspect }: CaffeineGraphProps) {
+  const chart = useMemo(() => buildChartModel(series, bedtime, referenceLineMgPerL), [series, bedtime, referenceLineMgPerL]);
   const [inspection, setInspection] = useState<GraphInspection>(() => ({ index: 0, elapsedMinutes: chart.elapsedDomain[0] }));
   const inspected = useMemo(() => inspectSeriesAt(series, inspection.index), [series, inspection.index]);
 
@@ -87,7 +87,7 @@ export function CaffeineGraph({ series, bedtime, thresholdMgPerL, onInspect }: C
         ))}
 
         <line x1={padding.left} x2={width - padding.right} y1={chart.thresholdY} y2={chart.thresholdY} className="threshold-line" />
-        <text x={width - padding.right} y={chart.thresholdY - 8} textAnchor="end" className="marker-label">sleep target {thresholdMgPerL.toFixed(1)} mg/L</text>
+        <text x={width - padding.right} y={chart.thresholdY - 8} textAnchor="end" className="marker-label">reference line {referenceLineMgPerL.toFixed(1)} mg/L</text>
 
         <line x1={chart.bedtimeX} x2={chart.bedtimeX} y1={padding.top} y2={height - padding.bottom} className="bedtime-line" />
         <text x={chart.bedtimeX - 8} y={padding.top + 16} textAnchor="end" className="marker-label">bedtime</text>
@@ -119,11 +119,11 @@ export function CaffeineGraph({ series, bedtime, thresholdMgPerL, onInspect }: C
   );
 }
 
-export function buildChartModel(series: GraphSeries[], bedtime: Date, thresholdMgPerL: number) {
+export function buildChartModel(series: GraphSeries[], bedtime: Date, referenceLineMgPerL: number) {
   const allPoints = series.flatMap((item) => item.points);
   const elapsedMin = Math.min(...allPoints.map((point) => point.elapsedMinutes), 0);
   const elapsedMax = Math.max(...allPoints.map((point) => point.elapsedMinutes), 1);
-  const concentrationMax = Math.max(thresholdMgPerL, ...allPoints.map((point) => point.bounds.highMgPerL), 0.5) * 1.15;
+  const concentrationMax = Math.max(referenceLineMgPerL, ...allPoints.map((point) => point.bounds.highMgPerL), 0.5) * 1.15;
   const startTimestamp = allPoints[0]?.timestamp.getTime() ?? bedtime.getTime();
   const bedtimeElapsed = (bedtime.getTime() - startTimestamp) / 60_000;
 
@@ -139,7 +139,7 @@ export function buildChartModel(series: GraphSeries[], bedtime: Date, thresholdM
     maxPointCount: Math.max(...series.map((item) => item.points.length), 1),
     yScale,
     inspectX,
-    thresholdY: yScale(thresholdMgPerL),
+    thresholdY: yScale(referenceLineMgPerL),
     bedtimeX: xScale(bedtimeElapsed),
     yTicks: [0, concentrationMax / 3, (concentrationMax * 2) / 3, concentrationMax].map((value) => ({ value, y: yScale(value) })),
     xTicks: [elapsedMin, elapsedMin + (elapsedMax - elapsedMin) / 3, elapsedMin + ((elapsedMax - elapsedMin) * 2) / 3, elapsedMax].map((value) => ({ value, x: xScale(value) })),

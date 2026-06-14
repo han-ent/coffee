@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CaffeineGraph, type GraphSeries } from './components/CaffeineGraph';
 import { VERTUO_SEED_CATALOG, findCatalogItem } from './catalog/vertuo';
-import { simulateScenario } from './domain';
+import { concentrationAt, simulateScenario } from './domain';
 import {
   SHARE_LABEL_PRIVACY_WARNING,
   addCatalogIntake,
   addManualIntake,
+  clearScenario,
+  copyScenario,
   createDefaultScenarioState,
   createShareUrl,
+  getScenarioState,
   loadScenarioState,
   loadShareFromUrl,
   removeIntake,
@@ -34,6 +37,13 @@ function parsePositiveNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
+function formatDuration(minutes: number) {
+  if (!Number.isFinite(minutes) || minutes < 0) return 'No caffeine yet';
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return `${hours}h ${mins}m`;
+}
+
 export function App() {
   const initialLoad = useMemo(() => {
     const shared = loadShareFromUrl();
@@ -49,35 +59,57 @@ export function App() {
   const [selectedScenarioIndex, setSelectedScenarioIndex] = useState<0 | 1>(0);
   const [notice, setNotice] = useState(initialLoad.notice);
   const [catalogId, setCatalogId] = useState(VERTUO_SEED_CATALOG[0].id);
+  const [targetScenarioId, setTargetScenarioId] = useState('scenario-2');
   const [caffeineOverrideMg, setCaffeineOverrideMg] = useState('');
   const [manualLabel, setManualLabel] = useState('My coffee');
   const [manualMg, setManualMg] = useState('120');
   const [consumedAt, setConsumedAt] = useState(toLocalInputValue(new Date()));
   const [shareUrl, setShareUrl] = useState('');
-  const [showCandidatePreview, setShowCandidatePreview] = useState(false);
-
-  const selectedState = scenarioStates[selectedScenarioIndex];
-  const selectedScenarioLabel = selectedScenarioIndex === 0 ? 'Scenario 1' : 'Scenario 2';
+  const [weightDraft, setWeightDraft] = useState(String(initialLoad.state.profile.weightKg));
 
   useEffect(() => {
     saveScenarioState(scenarioStates[0]);
   }, [scenarioStates]);
 
+  useEffect(() => {
+    setWeightDraft(String(state.profile.weightKg));
+  }, [state.profile.weightKg]);
+
   const selectedCoffee = findCatalogItem(catalogId);
-  const scenarios = useMemo(() => scenarioStates.map((item, index) => ({ ...toScenario(item), name: `Scenario ${index + 1}` })), [scenarioStates]);
-  const startAt = useMemo(() => {
-    const timestamps = scenarioStates.flatMap((item) => item.intakes.map((intake) => new Date(intake.consumedAt).getTime()));
-    return timestamps.length > 0 ? new Date(Math.min(...timestamps)) : new Date();
-  }, [scenarioStates]);
+  const scenarioModels = useMemo(() => state.scenarios.map((scenario) => toScenario(state, scenario.id)), [state]);
+  const allIntakeDates = state.scenarios.flatMap((scenario) => scenario.intakes.map((intake) => new Date(intake.consumedAt).getTime()));
+  const startAt = useMemo(() => allIntakeDates.length ? new Date(Math.min(...allIntakeDates)) : new Date(), [allIntakeDates]);
   const endAt = useMemo(() => new Date(startAt.getTime() + 36 * 60 * 60_000), [startAt]);
-  const threshold = selectedState.sleep.thresholdMgPerL;
-  const previews = useMemo(() => scenarios.map((item) => simulateScenario(item, { startAt, endAt, stepMinutes: 1 })), [scenarios, startAt, endAt]);
-  const graphSeries: GraphSeries[] = useMemo(() => [
-    { id: 'scenario-1', label: 'Scenario 1', points: previews[0].points, tone: 'gold' },
-    { id: 'scenario-2', label: 'Scenario 2', points: previews[1].points, tone: 'blue' },
-  ], [previews]);
-  const preview = previews[selectedScenarioIndex];
-  const latestPoint = preview.points.at(-1);
+  const referenceLine = state.sleep.referenceLineMgPerL ?? 0.7;
+  const simulations = useMemo(
+    () => scenarioModels.map((scenario) => simulateScenario(scenario, { startAt, endAt, stepMinutes: 1 })),
+    [scenarioModels, startAt, endAt],
+  );
+  const graphSeries: GraphSeries[] = useMemo(() => simulations.map((simulation, index) => ({
+    id: state.scenarios[index]?.id ?? `scenario-${index + 1}`,
+    label: state.scenarios[index]?.name ?? `Scenario ${index + 1}`,
+    points: simulation.points,
+    tone: index === 0 ? 'gold' : 'blue',
+  })), [simulations, state.scenarios]);
+  const bedtime = new Date(state.sleep.bedtime);
+  const bedtimeResiduals = scenarioModels.map((scenario) => concentrationAt(state.profile, scenario.intakes, bedtime));
+  const latestIntakeTime = Math.max(...allIntakeDates, Number.NaN);
+  const minutesSinceLastCaffeineAtBedtime = Number.isFinite(latestIntakeTime) ? (bedtime.getTime() - latestIntakeTime) / 60_000 : Number.NaN;
+
+  function commitWeight() {
+    if (weightDraft.trim() === '') {
+      setNotice('Enter a weight between 25 and 250 kg. Last saved profile was preserved.');
+      setWeightDraft(String(state.profile.weightKg));
+      return;
+    }
+    const weightKg = Number(weightDraft);
+    if (!Number.isFinite(weightKg) || weightKg < 25 || weightKg > 250) {
+      setNotice('Weight must stay between 25 and 250 kg. Last saved profile was preserved.');
+      setWeightDraft(String(state.profile.weightKg));
+      return;
+    }
+    setState((current) => updateProfile(current, { weightKg }));
+  }
 
   function updateSelectedScenario(updater: (current: AppScenarioState) => AppScenarioState) {
     setScenarioStates((current) => {
@@ -89,8 +121,9 @@ export function App() {
 
   function handleAddCatalog() {
     const override = parsePositiveNumber(caffeineOverrideMg);
-    updateSelectedScenario((current) => addCatalogIntake(current, catalogId, fromLocalInputValue(consumedAt), override));
-    setNotice(`${selectedCoffee?.name ?? 'Coffee'} added to ${selectedScenarioLabel}. You can override caffeine values whenever your source differs.`);
+    setState((current) => addCatalogIntake(current, targetScenarioId, catalogId, fromLocalInputValue(consumedAt), override));
+    const targetName = getScenarioState(state, targetScenarioId).name;
+    setNotice(`${selectedCoffee?.name ?? 'Coffee'} added to ${targetName}. Manual caffeine overrides remain local-first.`);
   }
 
   function handleAddManual() {
@@ -99,8 +132,8 @@ export function App() {
       setNotice('Enter a positive caffeine amount before adding manual coffee.');
       return;
     }
-    updateSelectedScenario((current) => addManualIntake(current, manualLabel, caffeineMg, fromLocalInputValue(consumedAt)));
-    setNotice(`Manual caffeine entry added to ${selectedScenarioLabel}.`);
+    setState((current) => addManualIntake(current, targetScenarioId, manualLabel, caffeineMg, fromLocalInputValue(consumedAt)));
+    setNotice(`Manual caffeine entry added to ${getScenarioState(state, targetScenarioId).name}.`);
   }
 
   function handleShare() {
@@ -127,16 +160,16 @@ export function App() {
   function handleReset() {
     updateSelectedScenario(() => createDefaultScenarioState());
     setShareUrl('');
-    setNotice('Scenario reset locally.');
+    setNotice('Scenarios reset locally.');
   }
 
   return (
     <main className="app-shell">
       <section className="hero-card" aria-labelledby="app-title">
         <p className="eyebrow">Caffeine PK planner</p>
-        <h1 id="app-title">Plan coffee timing with transparent estimates.</h1>
+        <h1 id="app-title">Compare coffee timing with transparent scenarios.</h1>
         <p className="hero-copy">
-          Compare explicit Scenario 1 and Scenario 2 curves. Choose a focused Vertuo seed, override caffeine manually, or enter any coffee. Profile details stay
+          Build Scenario 1 and Scenario 2 explicitly, override caffeine manually, or enter any coffee. Profile details stay
           local by default; share links include only calculation essentials and sanitized labels.
         </p>
         <div className="hero-actions" aria-label="Foundation status">
@@ -175,21 +208,17 @@ export function App() {
           <label>
             Weight (kg)
             <input
-              type="number"
-              min="25"
-              max="250"
-              value={selectedState.profile.weightKg}
-              onChange={(event) => {
-                const weightKg = parsePositiveNumber(event.target.value);
-                if (!weightKg) return;
-                if (weightKg < 25 || weightKg > 250) {
-                  setNotice('Weight must stay between 25 and 250 kg.');
-                  return;
-                }
-                updateSelectedScenario((current) => updateProfile(current, { weightKg }));
+              type="text"
+              inputMode="decimal"
+              value={weightDraft}
+              onChange={(event) => setWeightDraft(event.target.value)}
+              onBlur={commitWeight}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commitWeight();
               }}
             />
           </label>
+          <p className="fine-print">Type freely, then leave the field to commit a value from 25–250 kg.</p>
           <label>
             Sensitivity
             <select
@@ -234,6 +263,12 @@ export function App() {
 
         <form className="foundation-card control-panel" onSubmit={(event) => event.preventDefault()}>
           <h2>Add coffee to {selectedScenarioLabel}</h2>
+          <label>
+            Add to scenario
+            <select value={targetScenarioId} onChange={(event) => setTargetScenarioId(event.target.value)}>
+              {state.scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
+            </select>
+          </label>
           <label>
             Time consumed
             <input type="datetime-local" value={consumedAt} onChange={(event) => setConsumedAt(event.target.value)} />
@@ -286,42 +321,56 @@ export function App() {
         </form>
 
         <section className="foundation-card result-panel" aria-label="Scenario summary">
-          <h2>{selectedScenarioLabel}</h2>
+          <h2>Scenarios</h2>
           <p className="fine-print">{SHARE_LABEL_PRIVACY_WARNING}</p>
-          {selectedState.intakes.length === 0 ? (
-            <p>No caffeine intakes yet. Add a Vertuo seed or manual coffee to start.</p>
-          ) : (
-            <ul className="intake-list">
-              {selectedState.intakes.map((intake) => (
-                <li key={intake.id}>
-                  <span>{intake.label}</span>
-                  <strong>{intake.caffeineMg} mg</strong>
-                  <time>{new Date(intake.consumedAt).toLocaleString()}</time>
-                  <button type="button" className="ghost-button" onClick={() => updateSelectedScenario((current) => removeIntake(current, intake.id))}>
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="hero-actions" aria-label="Scenario actions">
+            <button type="button" className="secondary-button" onClick={() => setState((current) => copyScenario(current, 'scenario-1', 'scenario-2'))}>Copy Scenario 1 to Scenario 2</button>
+            <button type="button" className="ghost-button" onClick={() => setState((current) => clearScenario(current, 'scenario-2'))}>Clear Scenario 2</button>
+          </div>
+          {state.scenarios.map((scenario) => (
+            <section key={scenario.id} aria-label={scenario.name}>
+              <h3>{scenario.name}</h3>
+              {scenario.intakes.length === 0 ? (
+                <p>No caffeine intakes yet.</p>
+              ) : (
+                <ul className="intake-list">
+                  {scenario.intakes.map((intake) => (
+                    <li key={intake.id}>
+                      <span>{intake.label}</span>
+                      <strong>{intake.caffeineMg} mg</strong>
+                      <time>{new Date(intake.consumedAt).toLocaleString()}</time>
+                      <button type="button" className="ghost-button" onClick={() => setState((current) => removeIntake(current, scenario.id, intake.id))}>
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))}
           <label className="inline-control">
             Bedtime marker
             <input type="datetime-local" value={toLocalInputValue(new Date(selectedState.sleep.bedtime))} onChange={(event) => updateSelectedScenario((current) => updateSleepSettings(current, { bedtime: fromLocalInputValue(event.target.value).toISOString() }))} />
           </label>
           <label className="inline-control">
-            Sleep target threshold (mg/L)
-            <input type="number" min="0.1" step="0.1" value={selectedState.sleep.thresholdMgPerL} onChange={(event) => {
-              const thresholdMgPerL = parsePositiveNumber(event.target.value);
-              if (thresholdMgPerL) updateSelectedScenario((current) => updateSleepSettings(current, { thresholdMgPerL }));
+            Custom reference line (mg/L)
+            <input type="number" min="0.1" step="0.1" value={referenceLine} onChange={(event) => {
+              const referenceLineMgPerL = parsePositiveNumber(event.target.value);
+              if (referenceLineMgPerL) setState((current) => updateSleepSettings(current, { referenceLineMgPerL }));
             }} />
           </label>
+          <p className="fine-print">The reference line is a personal planning marker, not a medical safety threshold.</p>
           <div className="metric-row">
-            <span>Estimated half-life</span>
-            <strong>{Math.round(preview.parameters.halfLifeMinutes)} min</strong>
+            <span>At bedtime · Scenario 1</span>
+            <strong>{bedtimeResiduals[0]?.concentrationMgPerL.toFixed(2) ?? '0.00'} mg/L</strong>
           </div>
           <div className="metric-row">
-            <span>Preview at +36h</span>
-            <strong>{latestPoint ? latestPoint.concentrationMgPerL.toFixed(2) : '0.00'} mg/L</strong>
+            <span>At bedtime · Scenario 2</span>
+            <strong>{bedtimeResiduals[1]?.concentrationMgPerL.toFixed(2) ?? '0.00'} mg/L</strong>
+          </div>
+          <div className="metric-row">
+            <span>Time since last caffeine at bedtime</span>
+            <strong>{formatDuration(minutesSinceLastCaffeineAtBedtime)}</strong>
           </div>
           <button type="button" onClick={handleShare}>Create local share link</button>
           <button type="button" className="ghost-button" onClick={handleReset}>Reset</button>
@@ -329,13 +378,13 @@ export function App() {
         </section>
       </section>
 
-      <CaffeineGraph series={graphSeries} bedtime={new Date(selectedState.sleep.bedtime)} thresholdMgPerL={threshold} />
+      <CaffeineGraph series={graphSeries} bedtime={bedtime} referenceLineMgPerL={referenceLine} />
 
       <aside className="assumption-panel">
         <h2>Model framing</h2>
-        <p>{preview.disclaimer}</p>
+        <p>{simulations[0]?.disclaimer}</p>
         <ul>
-          {preview.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}
+          {simulations[0]?.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}
         </ul>
       </aside>
     </main>
