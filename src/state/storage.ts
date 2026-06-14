@@ -36,6 +36,7 @@ function serializeState(state: AppScenarioState) {
       ...intake,
       consumedAt: new Date(intake.consumedAt).toISOString(),
     })),
+    sleep: state.sleep,
     updatedAt: state.updatedAt,
   };
 }
@@ -46,11 +47,14 @@ function parseStoredState(value: unknown): AppScenarioState {
   const profile = record.profile as AppScenarioState['profile'];
   const intakes = record.intakes as AppScenarioState['intakes'];
   const updatedAt = typeof record.updatedAt === 'string' ? record.updatedAt : new Date().toISOString();
+  const sleep = record.sleep && typeof record.sleep === 'object'
+    ? record.sleep as AppScenarioState['sleep']
+    : createDefaultScenarioState().sleep;
 
   if (!profile || typeof profile.weightKg !== 'number') throw new Error('Stored profile is missing weightKg');
   if (!Array.isArray(intakes)) throw new Error('Stored intakes must be an array');
 
-  return { profile, intakes, updatedAt };
+  return { profile: { ...profile }, intakes, sleep, updatedAt };
 }
 
 function resolveStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {

@@ -24,6 +24,7 @@ describe('local scenario persistence', () => {
     expect(loaded.state.profile.smokingStatus).toBe('smoker');
     expect(loaded.state.profile.takesOralContraceptives).toBe(true);
     expect(loaded.state.intakes[0].caffeineMg).toBe(100);
+    expect(loaded.state.sleep.thresholdMgPerL).toBe(0.7);
   });
 
   it('recovers to defaults when stored JSON is malformed', () => {

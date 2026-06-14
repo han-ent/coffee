@@ -93,6 +93,10 @@ export function CaffeineGraph({ series, bedtime, thresholdMgPerL, onInspect }: C
         <text x={chart.bedtimeX - 8} y={padding.top + 16} textAnchor="end" className="marker-label">bedtime</text>
 
         {chart.paths.map((path) => (
+          <path key={`${path.id}-band`} d={path.bandD} className={`uncertainty-band ${path.tone}`} aria-label={`${path.label} uncertainty band`} />
+        ))}
+
+        {chart.paths.map((path) => (
           <path key={path.id} d={path.d} className={`series-line ${path.tone}`} fill="none" />
         ))}
 
@@ -105,7 +109,10 @@ export function CaffeineGraph({ series, bedtime, thresholdMgPerL, onInspect }: C
       <div className="inspection-sheet" aria-live="polite">
         <strong>{formatTimestamp(inspected[0]?.timestamp)}</strong>
         {inspected.map((item) => (
-          <span key={item.id}>{item.label}: {item.concentrationMgPerL.toFixed(2)} mg/L</span>
+          <span key={item.id}>
+            {item.label}: {item.concentrationMgPerL.toFixed(2)} mg/L ({item.lowMgPerL.toFixed(2)}–{item.highMgPerL.toFixed(2)})
+            {item.topContributor ? ` · most from ${item.topContributor.label}` : ''}
+          </span>
         ))}
       </div>
     </section>
@@ -136,7 +143,13 @@ export function buildChartModel(series: GraphSeries[], bedtime: Date, thresholdM
     bedtimeX: xScale(bedtimeElapsed),
     yTicks: [0, concentrationMax / 3, (concentrationMax * 2) / 3, concentrationMax].map((value) => ({ value, y: yScale(value) })),
     xTicks: [elapsedMin, elapsedMin + (elapsedMax - elapsedMin) / 3, elapsedMin + ((elapsedMax - elapsedMin) * 2) / 3, elapsedMax].map((value) => ({ value, x: xScale(value) })),
-    paths: series.map((item) => ({ id: item.id, tone: item.tone, d: pathForPoints(item.points, xScale, yScale), label: item.label })),
+    paths: series.map((item) => ({
+      id: item.id,
+      tone: item.tone,
+      d: pathForPoints(item.points, xScale, yScale),
+      bandD: bandPathForPoints(item.points, xScale, yScale),
+      label: item.label,
+    })),
   };
 }
 
@@ -159,15 +172,37 @@ function pathForPoints(
     .join(' ');
 }
 
+function bandPathForPoints(
+  points: ConcentrationPoint[],
+  xScale: (elapsedMinutes: number) => number,
+  yScale: (mgPerL: number) => number,
+) {
+  const upper = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${xScale(point.elapsedMinutes).toFixed(2)} ${yScale(point.bounds.highMgPerL).toFixed(2)}`)
+    .join(' ');
+  const lower = [...points]
+    .reverse()
+    .map((point) => `L ${xScale(point.elapsedMinutes).toFixed(2)} ${yScale(point.bounds.lowMgPerL).toFixed(2)}`)
+    .join(' ');
+  return `${upper} ${lower} Z`;
+}
+
 function inspectSeriesAt(series: GraphSeries[], index: number) {
   return series.map((item) => {
     const point = item.points[Math.min(index, item.points.length - 1)] ?? item.points.at(-1);
+    const topContributor = point?.contributors.reduce<typeof point.contributors[number] | null>(
+      (best, contributor) => !best || contributor.centralMg > best.centralMg ? contributor : best,
+      null,
+    );
     return {
       id: item.id,
       label: item.label,
       tone: item.tone,
       timestamp: point?.timestamp,
       concentrationMgPerL: point?.concentrationMgPerL ?? 0,
+      lowMgPerL: point?.bounds.lowMgPerL ?? 0,
+      highMgPerL: point?.bounds.highMgPerL ?? 0,
+      topContributor,
     };
   });
 }

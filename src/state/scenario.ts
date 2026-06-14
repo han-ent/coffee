@@ -1,9 +1,15 @@
 import { coffeeProductToIntake, makeManualCoffeeIntake, type CaffeineIntake, type PersonProfile, type Scenario } from '../domain';
 import { findCatalogItem } from '../catalog/vertuo';
 
+export interface SleepSettings {
+  bedtime: string;
+  thresholdMgPerL: number;
+}
+
 export interface AppScenarioState {
   profile: PersonProfile;
   intakes: CaffeineIntake[];
+  sleep: SleepSettings;
   updatedAt: string;
 }
 
@@ -16,10 +22,18 @@ export const DEFAULT_PROFILE: PersonProfile = {
   takesOralContraceptives: false,
 };
 
+export function createDefaultSleepSettings(now = new Date()): SleepSettings {
+  return {
+    bedtime: new Date(now.getTime() + 8 * 60 * 60_000).toISOString(),
+    thresholdMgPerL: 0.7,
+  };
+}
+
 export function createDefaultScenarioState(now = new Date()): AppScenarioState {
   return {
-    profile: DEFAULT_PROFILE,
+    profile: { ...DEFAULT_PROFILE },
     intakes: [],
+    sleep: createDefaultSleepSettings(now),
     updatedAt: now.toISOString(),
   };
 }
@@ -65,6 +79,10 @@ export function addManualIntake(
 
 export function updateProfile(state: AppScenarioState, profilePatch: Partial<PersonProfile>): AppScenarioState {
   return touch({ ...state, profile: { ...state.profile, ...profilePatch } });
+}
+
+export function updateSleepSettings(state: AppScenarioState, sleepPatch: Partial<SleepSettings>): AppScenarioState {
+  return touch({ ...state, sleep: { ...state.sleep, ...sleepPatch } });
 }
 
 export function removeIntake(state: AppScenarioState, intakeId: string): AppScenarioState {

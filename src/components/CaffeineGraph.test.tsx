@@ -15,8 +15,8 @@ const scenario: Scenario = {
     { id: 'afternoon', label: 'Afternoon espresso', caffeineMg: 80, consumedAt: new Date('2026-06-14T14:00:00.000Z') },
   ],
 };
-const result = simulateScenario(scenario, { startAt, endAt, stepMinutes: 5 });
-const comparison = simulateScenario({ ...scenario, intakes: [...scenario.intakes, { id: 'candidate', label: 'Candidate', caffeineMg: 150, consumedAt: new Date('2026-06-14T16:00:00.000Z') }] }, { startAt, endAt, stepMinutes: 5 });
+const result = simulateScenario(scenario, { startAt, endAt, stepMinutes: 1 });
+const comparison = simulateScenario({ ...scenario, intakes: [...scenario.intakes, { id: 'candidate', label: 'Candidate', caffeineMg: 150, consumedAt: new Date('2026-06-14T16:00:00.000Z') }] }, { startAt, endAt, stepMinutes: 1 });
 const series: GraphSeries[] = [
   { id: 'current', label: 'Current plan', points: result.points, tone: 'gold' },
   { id: 'comparison', label: 'With candidate', points: comparison.points, tone: 'blue' },
@@ -33,6 +33,8 @@ describe('CaffeineGraph', () => {
 
     expect(screen.getByText(/Current plan:/)).toBeInTheDocument();
     expect(screen.getByText(/With candidate:/)).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/uncertainty band/i)).toHaveLength(2);
+    expect(screen.getAllByText(/most from/i)).toHaveLength(2);
     expect(screen.getByText(/sleep target 0.7 mg\/L/i)).toBeInTheDocument();
     expect(screen.getByText(/bedtime/i)).toBeInTheDocument();
     expect(onInspect).toHaveBeenCalled();

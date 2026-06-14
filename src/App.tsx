@@ -14,6 +14,7 @@ import {
   saveScenarioState,
   toScenario,
   updateProfile,
+  updateSleepSettings,
   type AppScenarioState,
 } from './state';
 import './styles/tokens.css';
@@ -26,6 +27,11 @@ function toLocalInputValue(date: Date) {
 
 function fromLocalInputValue(value: string) {
   return value ? new Date(value) : new Date();
+}
+
+function parsePositiveNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 export function App() {
@@ -44,8 +50,6 @@ export function App() {
   const [manualMg, setManualMg] = useState('120');
   const [consumedAt, setConsumedAt] = useState(toLocalInputValue(new Date()));
   const [shareUrl, setShareUrl] = useState('');
-  const [bedtime, setBedtime] = useState(toLocalInputValue(new Date(Date.now() + 8 * 60 * 60_000)));
-  const [thresholdMgPerL, setThresholdMgPerL] = useState('0.7');
 
   useEffect(() => {
     saveScenarioState(state);
@@ -55,12 +59,12 @@ export function App() {
   const scenario = useMemo(() => toScenario(state), [state]);
   const startAt = useMemo(() => state.intakes[0]?.consumedAt ? new Date(state.intakes[0].consumedAt) : new Date(), [state.intakes]);
   const endAt = useMemo(() => new Date(startAt.getTime() + 36 * 60 * 60_000), [startAt]);
-  const threshold = Number(thresholdMgPerL) || 0.7;
-  const preview = useMemo(() => simulateScenario(scenario, { startAt, endAt, stepMinutes: 5 }), [scenario, startAt, endAt]);
+  const threshold = state.sleep.thresholdMgPerL;
+  const preview = useMemo(() => simulateScenario(scenario, { startAt, endAt, stepMinutes: 1 }), [scenario, startAt, endAt]);
   const comparison = useMemo(() => {
     if (!selectedCoffee) return null;
     const candidate = coffeeProductToIntake(selectedCoffee, fromLocalInputValue(consumedAt), `compare-${selectedCoffee.id}`);
-    return simulateScenario({ ...scenario, intakes: [...scenario.intakes, candidate] }, { startAt, endAt, stepMinutes: 5 });
+    return simulateScenario({ ...scenario, intakes: [...scenario.intakes, candidate] }, { startAt, endAt, stepMinutes: 1 });
   }, [selectedCoffee, consumedAt, scenario, startAt, endAt]);
   const graphSeries: GraphSeries[] = useMemo(() => [
     { id: 'current', label: 'Current plan', points: preview.points, tone: 'gold' },
@@ -69,13 +73,18 @@ export function App() {
   const latestPoint = preview.points.at(-1);
 
   function handleAddCatalog() {
-    const override = caffeineOverrideMg ? Number(caffeineOverrideMg) : undefined;
+    const override = parsePositiveNumber(caffeineOverrideMg);
     setState((current) => addCatalogIntake(current, catalogId, fromLocalInputValue(consumedAt), override));
     setNotice(`${selectedCoffee?.name ?? 'Coffee'} added. You can override caffeine values whenever your source differs.`);
   }
 
   function handleAddManual() {
-    setState((current) => addManualIntake(current, manualLabel, Number(manualMg), fromLocalInputValue(consumedAt)));
+    const caffeineMg = parsePositiveNumber(manualMg);
+    if (!caffeineMg) {
+      setNotice('Enter a positive caffeine amount before adding manual coffee.');
+      return;
+    }
+    setState((current) => addManualIntake(current, manualLabel, caffeineMg, fromLocalInputValue(consumedAt)));
     setNotice('Manual caffeine entry added.');
   }
 
@@ -128,7 +137,10 @@ export function App() {
               min="25"
               max="250"
               value={state.profile.weightKg}
-              onChange={(event) => setState((current) => updateProfile(current, { weightKg: Number(event.target.value) }))}
+              onChange={(event) => {
+                const weightKg = parsePositiveNumber(event.target.value);
+                if (weightKg) setState((current) => updateProfile(current, { weightKg }));
+              }}
             />
           </label>
           <label>
@@ -239,18 +251,21 @@ export function App() {
           )}
           <label className="inline-control">
             Bedtime marker
-            <input type="datetime-local" value={bedtime} onChange={(event) => setBedtime(event.target.value)} />
+            <input type="datetime-local" value={toLocalInputValue(new Date(state.sleep.bedtime))} onChange={(event) => setState((current) => updateSleepSettings(current, { bedtime: fromLocalInputValue(event.target.value).toISOString() }))} />
           </label>
           <label className="inline-control">
             Sleep target threshold (mg/L)
-            <input type="number" min="0.1" step="0.1" value={thresholdMgPerL} onChange={(event) => setThresholdMgPerL(event.target.value)} />
+            <input type="number" min="0.1" step="0.1" value={state.sleep.thresholdMgPerL} onChange={(event) => {
+              const thresholdMgPerL = parsePositiveNumber(event.target.value);
+              if (thresholdMgPerL) setState((current) => updateSleepSettings(current, { thresholdMgPerL }));
+            }} />
           </label>
           <div className="metric-row">
             <span>Estimated half-life</span>
             <strong>{Math.round(preview.parameters.halfLifeMinutes)} min</strong>
           </div>
           <div className="metric-row">
-            <span>Preview at +16h</span>
+            <span>Preview at +36h</span>
             <strong>{latestPoint ? latestPoint.concentrationMgPerL.toFixed(2) : '0.00'} mg/L</strong>
           </div>
           <button type="button" onClick={handleShare}>Create local share link</button>
@@ -259,7 +274,7 @@ export function App() {
         </section>
       </section>
 
-      <CaffeineGraph series={graphSeries} bedtime={fromLocalInputValue(bedtime)} thresholdMgPerL={threshold} />
+      <CaffeineGraph series={graphSeries} bedtime={new Date(state.sleep.bedtime)} thresholdMgPerL={threshold} />
 
       <aside className="assumption-panel">
         <h2>Model framing</h2>

@@ -444,3 +444,16 @@ button:hover {
     backdrop-filter: blur(18px);
   }
 }
+
+.uncertainty-band {
+  opacity: 0.15;
+  stroke: none;
+}
+
+.uncertainty-band.gold {
+  fill: #f2c77c;
+}
+
+.uncertainty-band.blue {
+  fill: #8eb0ff;
+}
