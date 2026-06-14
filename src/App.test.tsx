@@ -35,7 +35,7 @@ describe('App shell', () => {
 
     fireEvent.click(screen.getByLabelText(/Preview selected coffee on graph before adding/i));
 
-    expect(screen.getByText(/With Melozio Boost/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/With Melozio Boost/i).length).toBeGreaterThan(0);
   });
 
 });
