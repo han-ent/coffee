@@ -89,7 +89,13 @@ export function App() {
   }
 
   function handleShare() {
-    const nextShareUrl = createShareUrl(state);
+    let nextShareUrl: string;
+    try {
+      nextShareUrl = createShareUrl(state);
+    } catch (error) {
+      setNotice(error instanceof Error ? `Share link could not be created: ${error.message}` : 'Share link could not be created.');
+      return;
+    }
     setShareUrl(nextShareUrl);
 
     if (!navigator.clipboard) {
@@ -139,7 +145,12 @@ export function App() {
               value={state.profile.weightKg}
               onChange={(event) => {
                 const weightKg = parsePositiveNumber(event.target.value);
-                if (weightKg) setState((current) => updateProfile(current, { weightKg }));
+                if (!weightKg) return;
+                if (weightKg < 25 || weightKg > 250) {
+                  setNotice('Weight must stay between 25 and 250 kg.');
+                  return;
+                }
+                setState((current) => updateProfile(current, { weightKg }));
               }}
             />
           </label>

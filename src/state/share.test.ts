@@ -7,6 +7,7 @@ import {
   createDefaultScenarioState,
   createSharePayload,
   createShareUrl,
+  encodeSharePayload,
   loadShareFromUrl,
   sanitizeLabel,
   toShareSafeProfile,
@@ -86,6 +87,14 @@ describe('share payload privacy contract', () => {
 
     expect(loadShareFromUrl('?scenario=not-valid').ok).toBe(false);
     expect(loadShareFromUrl(`?scenario=${btoa(JSON.stringify({ v: 1, calcParams: { weightKg: Number.NaN }, intakes: [] }))}`).ok).toBe(false);
+  });
+
+  it('rejects invalid payloads during share creation, not only decode', () => {
+    const state = createDefaultScenarioState(consumedAt);
+    const payload = createSharePayload(state);
+    payload.calcParams.weightKg = 251;
+
+    expect(() => encodeSharePayload(payload)).toThrow(/malformed|unsupported|weightKg|range/i);
   });
 
   it('sanitizes labels for persistence and sharing display', () => {

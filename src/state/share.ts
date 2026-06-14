@@ -58,6 +58,7 @@ export function createSharePayload(state: AppScenarioState): SharedScenarioPaylo
 }
 
 export function encodeSharePayload(payload: SharedScenarioPayload): string {
+  assertSharePayload(payload);
   const json = JSON.stringify(payload);
   if (json.length > MAX_SHARE_BYTES) throw new Error('Share payload is too large');
   return btoa(unescape(encodeURIComponent(json)));

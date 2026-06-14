@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from './App';
 
@@ -15,5 +15,15 @@ describe('App shell', () => {
     expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
     expect(screen.getAllByText(/sleep target/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/bedtime/i).length).toBeGreaterThan(0);
+  });
+
+  it('guards out-of-range weight edits instead of crashing the simulation render', () => {
+    render(<App />);
+
+    const weightInput = screen.getByLabelText(/Weight \(kg\)/i);
+    fireEvent.change(weightInput, { target: { value: '251' } });
+
+    expect(screen.getByRole('status')).toHaveTextContent(/between 25 and 250 kg/i);
+    expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
   });
 });
