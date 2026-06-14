@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from './App';
 
@@ -14,6 +14,10 @@ describe('App shell', () => {
     expect(screen.getAllByText(/not medical advice/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/adjustable planning marker/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add manual coffee/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Company/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Capsule system/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Capsule product/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add selected capsule/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/Weight \(kg\)/i)).toHaveAttribute('list', 'weight-suggestions-kg');
     expect(screen.getByRole('radio', { name: /scenario 1/i })).toBeChecked();
     expect(screen.getByRole('radio', { name: /scenario 2/i })).toBeInTheDocument();
@@ -69,5 +73,22 @@ describe('App shell', () => {
     expect(screen.queryByText(/With Melozio Boost/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);
+  });
+
+  it('filters curated capsules by company, system, and search while preserving manual override', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/Company/i), { target: { value: 'Nespresso' } });
+    fireEvent.change(screen.getByLabelText(/Capsule system/i), { target: { value: 'Original' } });
+    fireEvent.change(screen.getByLabelText(/Search products/i), { target: { value: 'decaf' } });
+
+    expect(screen.getByLabelText(/Capsule product/i)).toHaveTextContent(/Decaffeinato/i);
+    await waitFor(() => expect(screen.getByText(/Nespresso Original/i)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText(/Override caffeine \(mg\)/i), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: /add selected capsule/i }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(/added to Scenario 1/i);
+    expect(screen.getByRole('region', { name: 'Scenario 1' })).toHaveTextContent('5 mg');
   });
 });

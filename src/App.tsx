@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CaffeineGraph, type GraphSeries } from './components/CaffeineGraph';
-import { VERTUO_SEED_CATALOG, findCatalogItem } from './catalog/vertuo';
+import {
+  CURATED_COFFEE_CATALOG,
+  doseGroupLabel,
+  findCatalogItem,
+  getCatalogBrands,
+  getCatalogProducts,
+  getCatalogSystems,
+} from './catalog/vertuo';
 import { concentrationAt, simulateScenario } from './domain';
 import {
   SHARE_LABEL_PRIVACY_WARNING,
@@ -57,7 +64,10 @@ export function App() {
   const [state, setState] = useState<AppScenarioState>(initialLoad.state);
   const [selectedScenarioIndex, setSelectedScenarioIndex] = useState<0 | 1>(0);
   const [notice, setNotice] = useState(initialLoad.notice);
-  const [catalogId, setCatalogId] = useState(VERTUO_SEED_CATALOG[0].id);
+  const [catalogBrand, setCatalogBrand] = useState(CURATED_COFFEE_CATALOG[0].brand);
+  const [catalogSystem, setCatalogSystem] = useState(CURATED_COFFEE_CATALOG[0].system);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogId, setCatalogId] = useState(CURATED_COFFEE_CATALOG[0].id);
   const [targetScenarioId, setTargetScenarioId] = useState('scenario-1');
   const [caffeineOverrideMg, setCaffeineOverrideMg] = useState('');
   const [manualLabel, setManualLabel] = useState('My coffee');
@@ -73,6 +83,25 @@ export function App() {
   useEffect(() => {
     setWeightDraft(String(state.profile.weightKg));
   }, [state.profile.weightKg]);
+
+  const catalogBrands = useMemo(() => getCatalogBrands(), []);
+  const catalogSystems = useMemo(() => getCatalogSystems(catalogBrand), [catalogBrand]);
+  const filteredCatalog = useMemo(
+    () => getCatalogProducts(catalogBrand, catalogSystem, catalogSearch),
+    [catalogBrand, catalogSystem, catalogSearch],
+  );
+
+  useEffect(() => {
+    const systems = getCatalogSystems(catalogBrand);
+    const nextSystem = systems[0];
+    if (nextSystem && !systems.includes(catalogSystem)) setCatalogSystem(nextSystem);
+  }, [catalogBrand, catalogSystem]);
+
+  useEffect(() => {
+    if (filteredCatalog.some((coffee) => coffee.id === catalogId)) return;
+    const fallback = filteredCatalog[0] ?? getCatalogProducts(catalogBrand, catalogSystem)[0] ?? CURATED_COFFEE_CATALOG[0];
+    setCatalogId(fallback.id);
+  }, [catalogBrand, catalogId, catalogSystem, filteredCatalog]);
 
   const targetScenarioName = getScenarioState(state, targetScenarioId).name;
   const selectedCoffee = findCatalogItem(catalogId);
@@ -282,18 +311,35 @@ export function App() {
             <input type="datetime-local" value={consumedAt} onChange={(event) => setConsumedAt(event.target.value)} />
           </label>
           <label>
-            Vertuo seed catalog
+            Company
+            <select value={catalogBrand} onChange={(event) => setCatalogBrand(event.target.value as typeof catalogBrand)}>
+              {catalogBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+            </select>
+          </label>
+          <label>
+            Capsule system
+            <select value={catalogSystem} onChange={(event) => setCatalogSystem(event.target.value as typeof catalogSystem)}>
+              {catalogSystems.map((system) => <option key={system} value={system}>{system}</option>)}
+            </select>
+          </label>
+          <label>
+            Search products
+            <input value={catalogSearch} placeholder="decaf, melozio, k-cup..." onChange={(event) => setCatalogSearch(event.target.value)} />
+          </label>
+          <label>
+            Capsule product
             <select value={catalogId} onChange={(event) => setCatalogId(event.target.value)}>
-              {VERTUO_SEED_CATALOG.map((coffee) => (
+              {filteredCatalog.map((coffee) => (
                 <option key={coffee.id} value={coffee.id}>
-                  {coffee.name} · {coffee.caffeineMg} mg
+                  {coffee.name} · {coffee.caffeineMg} mg · {coffee.doseGroup}
                 </option>
               ))}
             </select>
           </label>
           {selectedCoffee ? (
             <p className="fine-print">
-              {selectedCoffee.sizeLabel}, {selectedCoffee.servingMl} ml · {selectedCoffee.confidence}. {selectedCoffee.sourceNote}
+              {selectedCoffee.brand} {selectedCoffee.system} · {selectedCoffee.sizeLabel}, {selectedCoffee.servingMl} ml · {doseGroupLabel(selectedCoffee)}.
+              {' '}{selectedCoffee.marketNote} {selectedCoffee.sourceNote}
             </p>
           ) : null}
           <label>
@@ -306,7 +352,7 @@ export function App() {
               onChange={(event) => setCaffeineOverrideMg(event.target.value)}
             />
           </label>
-          <button type="button" onClick={handleAddCatalog}>Add selected Vertuo</button>
+          <button type="button" onClick={handleAddCatalog}>Add selected capsule</button>
 
           <div className="divider" />
           <label>
