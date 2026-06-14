@@ -50,6 +50,7 @@ export function App() {
   const [manualMg, setManualMg] = useState('120');
   const [consumedAt, setConsumedAt] = useState(toLocalInputValue(new Date()));
   const [shareUrl, setShareUrl] = useState('');
+  const [showCandidatePreview, setShowCandidatePreview] = useState(false);
 
   useEffect(() => {
     saveScenarioState(state);
@@ -62,10 +63,10 @@ export function App() {
   const threshold = state.sleep.thresholdMgPerL;
   const preview = useMemo(() => simulateScenario(scenario, { startAt, endAt, stepMinutes: 1 }), [scenario, startAt, endAt]);
   const comparison = useMemo(() => {
-    if (!selectedCoffee) return null;
+    if (!showCandidatePreview || !selectedCoffee) return null;
     const candidate = coffeeProductToIntake(selectedCoffee, fromLocalInputValue(consumedAt), `compare-${selectedCoffee.id}`);
     return simulateScenario({ ...scenario, intakes: [...scenario.intakes, candidate] }, { startAt, endAt, stepMinutes: 1 });
-  }, [selectedCoffee, consumedAt, scenario, startAt, endAt]);
+  }, [showCandidatePreview, selectedCoffee, consumedAt, scenario, startAt, endAt]);
   const graphSeries: GraphSeries[] = useMemo(() => [
     { id: 'current', label: 'Current plan', points: preview.points, tone: 'gold' },
     ...(comparison ? [{ id: 'comparison', label: `With ${selectedCoffee?.name ?? 'selected coffee'}`, points: comparison.points, tone: 'blue' } as GraphSeries] : []),
@@ -226,6 +227,14 @@ export function App() {
               value={caffeineOverrideMg}
               onChange={(event) => setCaffeineOverrideMg(event.target.value)}
             />
+          </label>
+          <label className="checkbox-line">
+            <input
+              type="checkbox"
+              checked={showCandidatePreview}
+              onChange={(event) => setShowCandidatePreview(event.target.checked)}
+            />
+            Preview selected coffee on graph before adding
           </label>
           <button type="button" onClick={handleAddCatalog}>Add selected Vertuo</button>
 

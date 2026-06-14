@@ -26,4 +26,16 @@ describe('App shell', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/between 25 and 250 kg/i);
     expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
   });
+
+  it('keeps the selected-coffee comparison preview off until explicitly enabled', () => {
+    render(<App />);
+
+    expect(screen.getByText('Current plan')).toBeInTheDocument();
+    expect(screen.queryByText(/With Melozio Boost/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/Preview selected coffee on graph before adding/i));
+
+    expect(screen.getByText(/With Melozio Boost/i)).toBeInTheDocument();
+  });
+
 });
