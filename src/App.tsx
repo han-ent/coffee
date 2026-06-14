@@ -276,6 +276,12 @@ export function App() {
             </select>
           </label>
           <label>
+            Add to scenario
+            <select value={targetScenarioId} onChange={(event) => setTargetScenarioId(event.target.value)}>
+              {state.scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
+            </select>
+          </label>
+          <label>
             Time consumed
             <input type="datetime-local" value={consumedAt} onChange={(event) => setConsumedAt(event.target.value)} />
           </label>
