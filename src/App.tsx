@@ -64,9 +64,6 @@ export function App() {
   const [shareUrl, setShareUrl] = useState('');
   const [weightDraft, setWeightDraft] = useState(String(initialLoad.state.profile.weightKg));
 
-  const selectedState = scenarioStates[selectedScenarioIndex];
-  const selectedScenarioLabel = selectedScenarioIndex === 0 ? 'Scenario 1' : 'Scenario 2';
-
   useEffect(() => {
     saveScenarioState(state);
   }, [state]);
@@ -268,12 +265,6 @@ export function App() {
 
         <form className="foundation-card control-panel" onSubmit={(event) => event.preventDefault()}>
           <h2>Add coffee to {targetScenarioName}</h2>
-          <label>
-            Add to scenario
-            <select value={targetScenarioId} onChange={(event) => setTargetScenarioId(event.target.value)}>
-              {state.scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
-            </select>
-          </label>
           <label>
             Add to scenario
             <select value={targetScenarioId} onChange={(event) => setTargetScenarioId(event.target.value)}>
