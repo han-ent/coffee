@@ -68,8 +68,8 @@ export function App() {
   const selectedScenarioLabel = selectedScenarioIndex === 0 ? 'Scenario 1' : 'Scenario 2';
 
   useEffect(() => {
-    saveScenarioState(scenarioStates[0]);
-  }, [scenarioStates]);
+    saveScenarioState(state);
+  }, [state]);
 
   useEffect(() => {
     setWeightDraft(String(state.profile.weightKg));
@@ -120,14 +120,6 @@ export function App() {
     setState((current) => updater(current));
   }
 
-  function updateSelectedScenario(updater: (current: AppScenarioState) => AppScenarioState) {
-    setScenarioStates((current) => {
-      const next = [...current] as [AppScenarioState, AppScenarioState];
-      next[selectedScenarioIndex] = updater(current[selectedScenarioIndex]);
-      return next;
-    });
-  }
-
   function handleAddCatalog() {
     const override = parsePositiveNumber(caffeineOverrideMg);
     setState((current) => addCatalogIntake(current, targetScenarioId, catalogId, fromLocalInputValue(consumedAt), override));
@@ -147,7 +139,7 @@ export function App() {
   function handleShare() {
     let nextShareUrl: string;
     try {
-      nextShareUrl = createShareUrl(selectedState);
+      nextShareUrl = createShareUrl(state);
     } catch (error) {
       setNotice(error instanceof Error ? `Share link could not be created: ${error.message}` : 'Share link could not be created.');
       return;
@@ -236,8 +228,8 @@ export function App() {
           <label>
             Sensitivity
             <select
-              value={selectedState.profile.sensitivity ?? 'typical'}
-              onChange={(event) => updateSelectedScenario((current) => updateProfile(current, { sensitivity: event.target.value as AppScenarioState['profile']['sensitivity'] }))}
+              value={state.profile.sensitivity ?? 'typical'}
+              onChange={(event) => setState((current) => updateProfile(current, { sensitivity: event.target.value as AppScenarioState['profile']['sensitivity'] }))}
             >
               <option value="low">Low</option>
               <option value="typical">Typical</option>
@@ -247,8 +239,8 @@ export function App() {
           <label>
             Smoking flag (local only)
             <select
-              value={selectedState.profile.smokingStatus ?? 'non-smoker'}
-              onChange={(event) => updateSelectedScenario((current) => updateProfile(current, { smokingStatus: event.target.value as AppScenarioState['profile']['smokingStatus'] }))}
+              value={state.profile.smokingStatus ?? 'non-smoker'}
+              onChange={(event) => setState((current) => updateProfile(current, { smokingStatus: event.target.value as AppScenarioState['profile']['smokingStatus'] }))}
             >
               <option value="non-smoker">Non-smoker</option>
               <option value="smoker">Smoker</option>
@@ -257,16 +249,16 @@ export function App() {
           <label className="checkbox-line">
             <input
               type="checkbox"
-              checked={Boolean(selectedState.profile.takesOralContraceptives)}
-              onChange={(event) => updateSelectedScenario((current) => updateProfile(current, { takesOralContraceptives: event.target.checked }))}
+              checked={Boolean(state.profile.takesOralContraceptives)}
+              onChange={(event) => setState((current) => updateProfile(current, { takesOralContraceptives: event.target.checked }))}
             />
             Oral contraceptive flag (local only)
           </label>
           <label>
             Pregnancy/postpartum flag (local only)
             <select
-              value={selectedState.profile.pregnancyStatus ?? 'not-pregnant'}
-              onChange={(event) => updateSelectedScenario((current) => updateProfile(current, { pregnancyStatus: event.target.value as AppScenarioState['profile']['pregnancyStatus'] }))}
+              value={state.profile.pregnancyStatus ?? 'not-pregnant'}
+              onChange={(event) => setState((current) => updateProfile(current, { pregnancyStatus: event.target.value as AppScenarioState['profile']['pregnancyStatus'] }))}
             >
               <option value="not-pregnant">Not pregnant</option>
               <option value="pregnant-or-postpartum">Pregnant/postpartum</option>
