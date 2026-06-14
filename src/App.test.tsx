@@ -18,7 +18,8 @@ describe('App shell', () => {
     expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);
     expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/sleep target/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/reference line/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/sleep target/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/bedtime/i).length).toBeGreaterThan(0);
   });
 

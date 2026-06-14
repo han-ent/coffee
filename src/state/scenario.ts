@@ -4,6 +4,7 @@ import { findCatalogItem } from '../catalog/vertuo';
 export interface SleepSettings {
   bedtime: string;
   referenceLineMgPerL?: number;
+  thresholdMgPerL?: number;
 }
 
 export interface ScenarioState {
@@ -140,7 +141,15 @@ export function updateProfile(state: AppScenarioState, profilePatch: Partial<Per
 }
 
 export function updateSleepSettings(state: AppScenarioState, sleepPatch: Partial<SleepSettings>): AppScenarioState {
-  return touch({ ...state, sleep: { ...state.sleep, ...sleepPatch } });
+  const { thresholdMgPerL, ...rest } = sleepPatch;
+  return touch({
+    ...state,
+    sleep: {
+      ...state.sleep,
+      ...rest,
+      referenceLineMgPerL: rest.referenceLineMgPerL ?? thresholdMgPerL ?? state.sleep.referenceLineMgPerL,
+    },
+  });
 }
 
 export function updateScenarioName(state: AppScenarioState, scenarioId: string, name: string): AppScenarioState {

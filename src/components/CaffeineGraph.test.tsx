@@ -25,7 +25,7 @@ const series: GraphSeries[] = [
 describe('CaffeineGraph', () => {
   it('renders comparison curves, threshold, bedtime, and live inspection details', () => {
     const onInspect = vi.fn();
-    render(<CaffeineGraph series={series} bedtime={new Date('2026-06-14T22:00:00.000Z')} thresholdMgPerL={0.7} onInspect={onInspect} />);
+    render(<CaffeineGraph series={series} bedtime={new Date('2026-06-14T22:00:00.000Z')} referenceLineMgPerL={0.7} onInspect={onInspect} />);
 
     const graph = screen.getByRole('img', { name: /caffeine concentration over time/i });
     vi.spyOn(graph, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 920, height: 360, right: 920, bottom: 360, x: 0, y: 0, toJSON: () => ({}) });
@@ -37,7 +37,7 @@ describe('CaffeineGraph', () => {
     expect(screen.getByText(/Scenario 2:/)).toBeInTheDocument();
     expect(screen.getAllByLabelText(/uncertainty band/i)).toHaveLength(2);
     expect(screen.getAllByText(/most from/i)).toHaveLength(2);
-    expect(screen.getByText(/sleep target 0.7 mg\/L/i)).toBeInTheDocument();
+    expect(screen.getByText(/reference line 0.7 mg\/L/i)).toBeInTheDocument();
     expect(screen.getByText(/bedtime/i)).toBeInTheDocument();
     expect(onInspect).toHaveBeenCalled();
   });

@@ -11,21 +11,41 @@ function memoryStorage(seed?: string) {
 }
 
 describe('local scenario persistence', () => {
-  it('saves and loads the local scenario including local-only profile flags and sleep settings', () => {
+  it('saves and loads v2 scenarios including local-only profile flags and sleep reference settings', () => {
     const storage = memoryStorage();
-    const state = addManualIntake(createDefaultScenarioState(new Date('2026-06-14T00:00:00.000Z')), 'Manual', 100, new Date('2026-06-14T08:00:00.000Z'));
+    const state = addManualIntake(createDefaultScenarioState(new Date('2026-06-14T00:00:00.000Z')), 'scenario-2', 'Manual', 100, new Date('2026-06-14T08:00:00.000Z'));
     state.profile.smokingStatus = 'smoker';
     state.profile.takesOralContraceptives = true;
-    state.sleep.thresholdMgPerL = 0.6;
+    state.sleep.referenceLineMgPerL = 0.6;
 
     saveScenarioState(state, storage);
     const loaded = loadScenarioState(storage);
 
     expect(loaded.ok).toBe(true);
+    expect(loaded.state.schemaVersion).toBe(2);
     expect(loaded.state.profile.smokingStatus).toBe('smoker');
     expect(loaded.state.profile.takesOralContraceptives).toBe(true);
-    expect(loaded.state.intakes[0].caffeineMg).toBe(100);
-    expect(loaded.state.sleep.thresholdMgPerL).toBe(0.6);
+    expect(loaded.state.scenarios[0].name).toBe('Scenario 1');
+    expect(loaded.state.scenarios[1].intakes[0].caffeineMg).toBe(100);
+    expect(loaded.state.sleep.referenceLineMgPerL).toBe(0.6);
+  });
+
+  it('migrates v1 local storage into Scenario 1 and a Scenario 2 comparison clone', () => {
+    const legacy = {
+      version: 1,
+      profile: { weightKg: 70 },
+      intakes: [{ id: 'legacy', label: 'Legacy mug', caffeineMg: 120, consumedAt: '2026-06-14T08:00:00.000Z' }],
+      sleep: { bedtime: '2026-06-14T22:00:00.000Z', thresholdMgPerL: 0.8 },
+    };
+
+    const loaded = loadScenarioState(memoryStorage(JSON.stringify(legacy)));
+
+    expect(loaded.ok).toBe(true);
+    expect(loaded.state.schemaVersion).toBe(2);
+    expect(loaded.state.scenarios).toHaveLength(2);
+    expect(loaded.state.scenarios[0].intakes[0].label).toBe('Legacy mug');
+    expect(loaded.state.scenarios[1].intakes[0].label).toBe('Legacy mug');
+    expect(loaded.state.sleep.referenceLineMgPerL).toBe(0.8);
   });
 
   it('recovers to defaults when stored JSON is malformed', () => {
