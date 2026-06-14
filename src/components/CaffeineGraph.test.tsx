@@ -18,8 +18,8 @@ const scenario: Scenario = {
 const result = simulateScenario(scenario, { startAt, endAt, stepMinutes: 1 });
 const comparison = simulateScenario({ ...scenario, intakes: [...scenario.intakes, { id: 'candidate', label: 'Candidate', caffeineMg: 150, consumedAt: new Date('2026-06-14T16:00:00.000Z') }] }, { startAt, endAt, stepMinutes: 1 });
 const series: GraphSeries[] = [
-  { id: 'current', label: 'Current plan', points: result.points, tone: 'gold' },
-  { id: 'comparison', label: 'With candidate', points: comparison.points, tone: 'blue' },
+  { id: 'scenario-1', label: 'Scenario 1', points: result.points, tone: 'gold' },
+  { id: 'scenario-2', label: 'Scenario 2', points: comparison.points, tone: 'blue' },
 ];
 
 describe('CaffeineGraph', () => {
@@ -31,8 +31,10 @@ describe('CaffeineGraph', () => {
     vi.spyOn(graph, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 920, height: 360, right: 920, bottom: 360, x: 0, y: 0, toJSON: () => ({}) });
     fireEvent.pointerMove(graph, { clientX: 460 });
 
-    expect(screen.getByText(/Current plan:/)).toBeInTheDocument();
-    expect(screen.getByText(/With candidate:/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Scenario 1/)).toHaveLength(2);
+    expect(screen.getAllByText(/Scenario 2/)).toHaveLength(2);
+    expect(screen.getByText(/Scenario 1:/)).toBeInTheDocument();
+    expect(screen.getByText(/Scenario 2:/)).toBeInTheDocument();
     expect(screen.getAllByLabelText(/uncertainty band/i)).toHaveLength(2);
     expect(screen.getAllByText(/most from/i)).toHaveLength(2);
     expect(screen.getByText(/sleep target 0.7 mg\/L/i)).toBeInTheDocument();
