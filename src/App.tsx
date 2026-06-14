@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CaffeineGraph, type GraphSeries } from './components/CaffeineGraph';
 import { VERTUO_SEED_CATALOG, findCatalogItem } from './catalog/vertuo';
-import { simulateScenario } from './domain';
+import { coffeeProductToIntake, simulateScenario } from './domain';
 import {
   SHARE_LABEL_PRIVACY_WARNING,
   addCatalogIntake,
@@ -43,6 +44,8 @@ export function App() {
   const [manualMg, setManualMg] = useState('120');
   const [consumedAt, setConsumedAt] = useState(toLocalInputValue(new Date()));
   const [shareUrl, setShareUrl] = useState('');
+  const [bedtime, setBedtime] = useState(toLocalInputValue(new Date(Date.now() + 8 * 60 * 60_000)));
+  const [thresholdMgPerL, setThresholdMgPerL] = useState('0.7');
 
   useEffect(() => {
     saveScenarioState(state);
@@ -50,11 +53,19 @@ export function App() {
 
   const selectedCoffee = findCatalogItem(catalogId);
   const scenario = useMemo(() => toScenario(state), [state]);
-  const preview = useMemo(() => {
-    const startAt = state.intakes[0]?.consumedAt ? new Date(state.intakes[0].consumedAt) : new Date();
-    const endAt = new Date(startAt.getTime() + 16 * 60 * 60_000);
-    return simulateScenario(scenario, { startAt, endAt, stepMinutes: 30 });
-  }, [scenario, state.intakes]);
+  const startAt = useMemo(() => state.intakes[0]?.consumedAt ? new Date(state.intakes[0].consumedAt) : new Date(), [state.intakes]);
+  const endAt = useMemo(() => new Date(startAt.getTime() + 36 * 60 * 60_000), [startAt]);
+  const threshold = Number(thresholdMgPerL) || 0.7;
+  const preview = useMemo(() => simulateScenario(scenario, { startAt, endAt, stepMinutes: 5 }), [scenario, startAt, endAt]);
+  const comparison = useMemo(() => {
+    if (!selectedCoffee) return null;
+    const candidate = coffeeProductToIntake(selectedCoffee, fromLocalInputValue(consumedAt), `compare-${selectedCoffee.id}`);
+    return simulateScenario({ ...scenario, intakes: [...scenario.intakes, candidate] }, { startAt, endAt, stepMinutes: 5 });
+  }, [selectedCoffee, consumedAt, scenario, startAt, endAt]);
+  const graphSeries: GraphSeries[] = useMemo(() => [
+    { id: 'current', label: 'Current plan', points: preview.points, tone: 'gold' },
+    ...(comparison ? [{ id: 'comparison', label: `With ${selectedCoffee?.name ?? 'selected coffee'}`, points: comparison.points, tone: 'blue' } as GraphSeries] : []),
+  ], [comparison, preview.points, selectedCoffee?.name]);
   const latestPoint = preview.points.at(-1);
 
   function handleAddCatalog() {
@@ -218,6 +229,14 @@ export function App() {
               ))}
             </ul>
           )}
+          <label className="inline-control">
+            Bedtime marker
+            <input type="datetime-local" value={bedtime} onChange={(event) => setBedtime(event.target.value)} />
+          </label>
+          <label className="inline-control">
+            Sleep target threshold (mg/L)
+            <input type="number" min="0.1" step="0.1" value={thresholdMgPerL} onChange={(event) => setThresholdMgPerL(event.target.value)} />
+          </label>
           <div className="metric-row">
             <span>Estimated half-life</span>
             <strong>{Math.round(preview.parameters.halfLifeMinutes)} min</strong>
@@ -231,6 +250,8 @@ export function App() {
           {shareUrl ? <textarea readOnly aria-label="Share URL" value={shareUrl} /> : null}
         </section>
       </section>
+
+      <CaffeineGraph series={graphSeries} bedtime={fromLocalInputValue(bedtime)} thresholdMgPerL={threshold} />
 
       <aside className="assumption-panel">
         <h2>Model framing</h2>

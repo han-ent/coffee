@@ -12,5 +12,8 @@ describe('App shell', () => {
     expect(screen.getByText(/share links include only calculation essentials/i)).toBeInTheDocument();
     expect(screen.getByText(/not medical advice/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add manual coffee/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/sleep target/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/bedtime/i).length).toBeGreaterThan(0);
   });
 });
