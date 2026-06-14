@@ -13,6 +13,13 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "^29.1.1",
     "@vitejs/plugin-react": "latest",
     "vite": "latest",
     "typescript": "latest",
@@ -20,10 +27,7 @@
     "eslint": "latest",
     "@eslint/js": "latest",
     "typescript-eslint": "latest",
-    "react": "latest",
-    "react-dom": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest"
-  },
-  "devDependencies": {}
+  }
 }
