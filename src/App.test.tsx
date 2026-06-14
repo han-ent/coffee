@@ -9,9 +9,12 @@ describe('App shell', () => {
     expect(screen.getByRole('heading', { name: /compare coffee timing/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /balanced profile/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /add coffee/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /scenarios & sleep planning/i })).toBeInTheDocument();
     expect(screen.getByText(/share links include only calculation essentials/i)).toBeInTheDocument();
-    expect(screen.getByText(/not medical advice/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/not medical advice/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/adjustable planning marker/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add manual coffee/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Weight \(kg\)/i)).toHaveAttribute('list', 'weight-suggestions-kg');
     expect(screen.getByRole('radio', { name: /scenario 1/i })).toBeChecked();
     expect(screen.getByRole('radio', { name: /scenario 2/i })).toBeInTheDocument();
     expect(screen.getByText(/Add coffee to Scenario 1/i)).toBeInTheDocument();

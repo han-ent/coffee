@@ -57,7 +57,7 @@ export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, onInspect 
         className="caffeine-graph"
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Caffeine concentration over time with threshold and bedtime markers"
+        aria-label="Caffeine concentration over time with reference line and bedtime markers"
         onPointerMove={handlePointer}
         onPointerDown={handlePointer}
       >

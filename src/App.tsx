@@ -37,6 +37,8 @@ function parsePositiveNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
+const weightSuggestionsKg = [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 100, 110, 120];
+
 function formatDuration(minutes: number) {
   if (!Number.isFinite(minutes) || minutes < 0) return 'No caffeine yet';
   const hours = Math.floor(minutes / 60);
@@ -212,6 +214,7 @@ export function App() {
             <input
               type="text"
               inputMode="decimal"
+              list="weight-suggestions-kg"
               value={weightDraft}
               onChange={(event) => setWeightDraft(event.target.value)}
               onBlur={commitWeight}
@@ -219,8 +222,11 @@ export function App() {
                 if (event.key === 'Enter') commitWeight();
               }}
             />
+            <datalist id="weight-suggestions-kg">
+              {weightSuggestionsKg.map((weight) => <option key={weight} value={weight} />)}
+            </datalist>
           </label>
-          <p className="fine-print">Type freely, then leave the field to commit a value from 25–250 kg.</p>
+          <p className="fine-print">Pick a suggested weight or type your own, then leave the field to commit 25–250 kg.</p>
           <label>
             Sensitivity
             <select
@@ -315,7 +321,7 @@ export function App() {
         </form>
 
         <section className="foundation-card result-panel" aria-label="Scenario summary">
-          <h2>Scenarios</h2>
+          <h2>Scenarios & sleep planning</h2>
           <p className="fine-print">{SHARE_LABEL_PRIVACY_WARNING}</p>
           <div className="hero-actions" aria-label="Scenario actions">
             <button type="button" className="secondary-button" onClick={() => setState((current) => copyScenario(current, 'scenario-1', 'scenario-2'))}>Copy Scenario 1 to Scenario 2</button>
@@ -353,7 +359,10 @@ export function App() {
               if (referenceLineMgPerL) setState((current) => updateSleepSettings(current, { referenceLineMgPerL }));
             }} />
           </label>
-          <p className="fine-print">The reference line is a personal planning marker, not a medical safety threshold.</p>
+          <p className="fine-print">
+            The reference line is an adjustable planning marker for comparing bedtime residuals, not medical advice or a
+            universal sleep cutoff.
+          </p>
           <div className="metric-row">
             <span>At bedtime · Scenario 1</span>
             <strong>{bedtimeResiduals[0]?.concentrationMgPerL.toFixed(2) ?? '0.00'} mg/L</strong>
