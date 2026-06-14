@@ -244,14 +244,15 @@ function parseIntakes(value: unknown): CaffeineIntake[] {
   return value.map((raw) => {
     const intake = raw as Partial<CaffeineIntake>;
     if (typeof intake.id !== 'string' || typeof intake.label !== 'string') throw new Error('Stored intake is invalid');
-    if (!Number.isFinite(intake.caffeineMg) || intake.caffeineMg! <= 0) throw new Error('Stored intake is invalid');
+    const caffeineMg = intake.caffeineMg;
+    if (!Number.isFinite(caffeineMg) || caffeineMg === undefined || caffeineMg <= 0) throw new Error('Stored intake is invalid');
     const consumedAt = new Date(intake.consumedAt ?? '');
     if (!Number.isFinite(consumedAt.getTime())) throw new Error('Stored intake is invalid');
     if (intake.servingMl !== undefined && (!Number.isFinite(intake.servingMl) || intake.servingMl <= 0)) throw new Error('Stored intake is invalid');
     return {
       id: intake.id,
       label: sanitizeLabel(intake.label),
-      caffeineMg: intake.caffeineMg,
+      caffeineMg,
       consumedAt,
       servingMl: intake.servingMl,
     };
