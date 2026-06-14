@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CaffeineGraph, type GraphSeries } from './components/CaffeineGraph';
 import { VERTUO_SEED_CATALOG, findCatalogItem } from './catalog/vertuo';
-import { coffeeProductToIntake, simulateScenario } from './domain';
+import { simulateScenario } from './domain';
 import {
   SHARE_LABEL_PRIVACY_WARNING,
   addCatalogIntake,
@@ -329,7 +329,7 @@ export function App() {
         </section>
       </section>
 
-      <CaffeineGraph series={graphSeries} bedtime={new Date(state.sleep.bedtime)} thresholdMgPerL={threshold} />
+      <CaffeineGraph series={graphSeries} bedtime={new Date(selectedState.sleep.bedtime)} thresholdMgPerL={threshold} />
 
       <aside className="assumption-panel">
         <h2>Model framing</h2>
