@@ -164,7 +164,7 @@ export function App() {
     <main className="app-shell">
       <section className="hero-card" aria-labelledby="app-title">
         <p className="eyebrow">Caffeine PK planner</p>
-        <h1 id="app-title">Compare coffee timing with transparent scenarios.</h1>
+        <h1 id="app-title">Plan coffee timing with transparent scenarios.</h1>
         <p className="hero-copy">
           Build Scenario 1 and Scenario 2 explicitly, override caffeine manually, or enter any coffee. Profile details stay
           local by default; share links include only calculation essentials and sanitized labels.
@@ -214,7 +214,13 @@ export function App() {
               type="text"
               inputMode="decimal"
               value={weightDraft}
-              onChange={(event) => setWeightDraft(event.target.value)}
+              onChange={(event) => {
+                setWeightDraft(event.target.value);
+                const draftWeight = Number(event.target.value);
+                if (event.target.value && Number.isFinite(draftWeight) && (draftWeight < 25 || draftWeight > 250)) {
+                  setNotice('Weight must stay between 25 and 250 kg. Last saved profile was preserved.');
+                }
+              }}
               onBlur={commitWeight}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') commitWeight();
