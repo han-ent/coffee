@@ -1,7 +1,7 @@
 import type { CaffeineSensitivity, PersonProfile } from '../domain';
 import { estimatePkParameters, type CaffeineIntake } from '../domain';
 import type { AppScenarioState, ScenarioState, SleepSettings } from './scenario';
-import { DEFAULT_PROFILE, createDefaultSleepSettings, migrateScenarioState, sanitizeLabel } from './scenario';
+import { APP_SCHEMA_VERSION, DEFAULT_PROFILE, SCENARIO_COMPARISON_COUNT, createDefaultSleepSettings, migrateScenarioState, sanitizeLabel } from './scenario';
 
 export const SHARE_PARAM = 'scenario';
 export const SHARE_LABEL_PRIVACY_WARNING =
@@ -23,6 +23,8 @@ interface SharedIntakePayload {
   caffeineMg: number;
   consumedAt: string;
   servingMl?: number;
+  catalogId?: string;
+  sourceConfidence?: string;
 }
 
 export interface SharedScenarioPayloadV1 {
@@ -53,7 +55,7 @@ export function createSharePayload(state: AppScenarioState): SharedScenarioPaylo
   const shareSafeProfile = toShareSafeProfile(state.profile);
   const parameters = estimatePkParameters(shareSafeProfile);
   return {
-    v: 2,
+    v: APP_SCHEMA_VERSION,
     calcParams: {
       weightKg: shareSafeProfile.weightKg,
       sensitivity: shareSafeProfile.sensitivity ?? 'typical',
@@ -155,7 +157,7 @@ function sharedPayloadToState(payload: SharedScenarioPayload): AppScenarioState 
   }));
 
   return migrateScenarioState({
-    schemaVersion: 2,
+    schemaVersion: APP_SCHEMA_VERSION,
     profile,
     scenarios,
     sleep: payload.sleep,
@@ -169,6 +171,8 @@ function serializeIntake(intake: CaffeineIntake): SharedIntakePayload {
     caffeineMg: intake.caffeineMg,
     consumedAt: new Date(intake.consumedAt).toISOString(),
     servingMl: intake.servingMl,
+    catalogId: intake.catalogId,
+    sourceConfidence: intake.sourceConfidence,
   };
 }
 
@@ -179,6 +183,8 @@ function parseSharedIntake(intake: SharedIntakePayload, index: number): Caffeine
     caffeineMg: intake.caffeineMg,
     consumedAt: new Date(intake.consumedAt),
     servingMl: intake.servingMl,
+    catalogId: intake.catalogId,
+    sourceConfidence: intake.sourceConfidence,
   };
 }
 
@@ -196,7 +202,7 @@ function assertSharePayload(payload: SharedScenarioPayload) {
     assertSharedIntakes(payload.intakes);
   } else {
     if (!Array.isArray(payload.scenarios) || payload.scenarios.length < 2) throw new Error('Invalid scenarios');
-    for (const scenario of payload.scenarios.slice(0, 2)) {
+    for (const scenario of payload.scenarios.slice(0, SCENARIO_COMPARISON_COUNT)) {
       if (typeof scenario.name !== 'string' || scenario.name.length > 80) throw new Error('Invalid scenario name');
       assertSharedIntakes(scenario.intakes);
     }
@@ -218,6 +224,8 @@ function assertSharedIntakes(intakes: SharedIntakePayload[]) {
     assertFiniteRange(intake.caffeineMg, 1, 1_000, 'caffeineMg');
     if (!isValidDateString(intake.consumedAt)) throw new Error('Invalid consumedAt');
     if (intake.servingMl !== undefined) assertFiniteRange(intake.servingMl, 1, 1_500, 'servingMl');
+    if (intake.catalogId !== undefined && (typeof intake.catalogId !== 'string' || intake.catalogId.length > 120)) throw new Error('Invalid catalogId');
+    if (intake.sourceConfidence !== undefined && (typeof intake.sourceConfidence !== 'string' || intake.sourceConfidence.length > 40)) throw new Error('Invalid sourceConfidence');
   }
 }
 

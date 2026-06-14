@@ -7,6 +7,9 @@ export interface SleepSettings {
   thresholdMgPerL?: number;
 }
 
+export const APP_SCHEMA_VERSION = 2;
+export const SCENARIO_COMPARISON_COUNT = 2;
+
 export interface ScenarioState {
   id: 'scenario-1' | 'scenario-2' | string;
   name: string;
@@ -48,7 +51,7 @@ export function createDefaultSleepSettings(now = new Date()): SleepSettings {
 
 export function createDefaultScenarioState(now = new Date()): AppScenarioState {
   return {
-    schemaVersion: 2,
+    schemaVersion: APP_SCHEMA_VERSION,
     profile: { ...DEFAULT_PROFILE },
     scenarios: [
       { id: 'scenario-1', name: 'Scenario 1', intakes: [] },
@@ -63,7 +66,7 @@ export function migrateScenarioState(value: unknown, now = new Date()): AppScena
   if (!value || typeof value !== 'object') throw new Error('Scenario state is not an object');
   const record = value as Record<string, unknown>;
 
-  if (record.schemaVersion === 2 || record.version === 2) {
+  if (record.schemaVersion === APP_SCHEMA_VERSION || record.version === APP_SCHEMA_VERSION) {
     return normalizeV2State(record, now);
   }
   if ((record.schemaVersion !== undefined && record.schemaVersion !== 1) || (record.version !== undefined && record.version !== 1)) {
@@ -214,7 +217,7 @@ function migrateV1State(value: LegacyAppScenarioState, now: Date): AppScenarioSt
   const scenarioTwo = { id: 'scenario-2', name: 'Scenario 2', intakes: intakes.map((intake) => ({ ...intake, id: `scenario-2-${intake.id}` })) };
 
   return {
-    schemaVersion: 2,
+    schemaVersion: APP_SCHEMA_VERSION,
     profile: { ...DEFAULT_PROFILE, ...value.profile },
     scenarios: [scenarioOne, scenarioTwo],
     sleep: parseSleep(value.sleep, now),
@@ -228,9 +231,9 @@ function normalizeV2State(record: Record<string, unknown>, now: Date): AppScenar
   if (!Array.isArray(record.scenarios) || record.scenarios.length < 2) throw new Error('Stored scenarios must include Scenario 1 and Scenario 2');
 
   return {
-    schemaVersion: 2,
+    schemaVersion: APP_SCHEMA_VERSION,
     profile: { ...DEFAULT_PROFILE, ...profile },
-    scenarios: record.scenarios.slice(0, 2).map((scenario, index) => parseScenario(scenario, index)) as [ScenarioState, ScenarioState],
+    scenarios: record.scenarios.slice(0, SCENARIO_COMPARISON_COUNT).map((scenario, index) => parseScenario(scenario, index)) as [ScenarioState, ScenarioState],
     sleep: parseSleep(record.sleep, now),
     updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : now.toISOString(),
   };
@@ -264,6 +267,8 @@ function parseIntakes(value: unknown): CaffeineIntake[] {
       caffeineMg,
       consumedAt,
       servingMl: intake.servingMl,
+      catalogId: typeof intake.catalogId === 'string' ? intake.catalogId : undefined,
+      sourceConfidence: typeof intake.sourceConfidence === 'string' ? intake.sourceConfidence : undefined,
     };
   });
 }

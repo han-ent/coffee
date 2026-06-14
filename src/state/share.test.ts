@@ -3,6 +3,7 @@ import { estimatePkParameters } from '../domain';
 import {
   DEFAULT_PROFILE,
   SHARE_LABEL_PRIVACY_WARNING,
+  addCatalogIntake,
   addManualIntake,
   createDefaultScenarioState,
   createSharePayload,
@@ -91,6 +92,20 @@ describe('share payload privacy contract', () => {
 
     expect(loadShareFromUrl('?scenario=not-valid').ok).toBe(false);
     expect(loadShareFromUrl(`?scenario=${btoa(JSON.stringify({ v: 1, calcParams: { weightKg: Number.NaN }, intakes: [] }))}`).ok).toBe(false);
+  });
+
+  it('preserves non-sensitive catalog provenance in share payloads', () => {
+    const state = addCatalogIntake(createDefaultScenarioState(consumedAt), 'scenario-1', 'nespresso-vertuo-half-caffeinato', consumedAt);
+    const payload = createSharePayload(state);
+    const result = loadShareFromUrl(`?scenario=${encodeSharePayload(payload)}`);
+
+    expect(payload.scenarios[0].intakes[0].catalogId).toBe('nespresso-vertuo-half-caffeinato');
+    expect(payload.scenarios[0].intakes[0].sourceConfidence).toBe('official-range');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.state.scenarios[0].intakes[0].catalogId).toBe('nespresso-vertuo-half-caffeinato');
+      expect(result.state.scenarios[0].intakes[0].sourceConfidence).toBe('official-range');
+    }
   });
 
   it('decodes legacy v1 share payloads into two v2 scenarios', () => {

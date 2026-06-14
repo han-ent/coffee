@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { addManualIntake, createDefaultScenarioState, loadScenarioState, removeIntake, saveScenarioState } from './index';
+import { LEGACY_STORAGE_KEY, addCatalogIntake, addManualIntake, createDefaultScenarioState, loadScenarioState, removeIntake, saveScenarioState } from './index';
 
 function memoryStorage(seed?: string) {
   const store = new Map<string, string>();
-  if (seed) store.set('caffeine-pk/scenario/v1', seed);
+  if (seed) store.set(LEGACY_STORAGE_KEY, seed);
   return {
     getItem: (key: string) => store.get(key) ?? null,
     setItem: (key: string, value: string) => store.set(key, value),
@@ -28,6 +28,22 @@ describe('local scenario persistence', () => {
     expect(loaded.state.scenarios[0].name).toBe('Scenario 1');
     expect(loaded.state.scenarios[1].intakes[0].caffeineMg).toBe(100);
     expect(loaded.state.sleep.referenceLineMgPerL).toBe(0.6);
+  });
+
+  it('preserves catalog provenance for stored catalog intakes', () => {
+    const storage = memoryStorage();
+    const state = addCatalogIntake(
+      createDefaultScenarioState(new Date('2026-06-14T00:00:00.000Z')),
+      'scenario-1',
+      'nespresso-vertuo-melozio-decaffeinato',
+      new Date('2026-06-14T09:00:00.000Z'),
+    );
+
+    expect(saveScenarioState(state, storage).ok).toBe(true);
+    const loaded = loadScenarioState(storage);
+
+    expect(loaded.state.scenarios[0].intakes[0].catalogId).toBe('nespresso-vertuo-melozio-decaffeinato');
+    expect(loaded.state.scenarios[0].intakes[0].sourceConfidence).toBe('official-range');
   });
 
   it('reports storage write failures without throwing', () => {

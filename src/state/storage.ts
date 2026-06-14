@@ -1,7 +1,8 @@
 import type { AppScenarioState } from './scenario';
-import { createDefaultScenarioState, migrateScenarioState } from './scenario';
+import { APP_SCHEMA_VERSION, createDefaultScenarioState, migrateScenarioState } from './scenario';
 
-export const STORAGE_KEY = 'caffeine-pk/scenario/v1';
+export const STORAGE_KEY = `caffeine-pk/scenario/v${APP_SCHEMA_VERSION}`;
+export const LEGACY_STORAGE_KEY = 'caffeine-pk/scenario/v1';
 
 export type LoadResult =
   | { ok: true; state: AppScenarioState; recovered: false }
@@ -25,7 +26,7 @@ export function saveScenarioState(state: AppScenarioState, storage = resolveStor
 export function loadScenarioState(storage = resolveStorage()): LoadResult {
   try {
     if (!storage) return { ok: true, state: createDefaultScenarioState(), recovered: false };
-    const raw = storage.getItem(STORAGE_KEY);
+    const raw = storage.getItem(STORAGE_KEY) ?? storage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return { ok: true, state: createDefaultScenarioState(), recovered: false };
     return { ok: true, state: migrateScenarioState(JSON.parse(raw)), recovered: false };
   } catch (error) {
@@ -40,7 +41,7 @@ export function loadScenarioState(storage = resolveStorage()): LoadResult {
 
 function serializeState(state: AppScenarioState) {
   return {
-    schemaVersion: 2,
+    schemaVersion: APP_SCHEMA_VERSION,
     profile: state.profile,
     scenarios: state.scenarios.map((scenario) => ({
       id: scenario.id,

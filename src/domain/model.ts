@@ -25,6 +25,7 @@ export interface CoffeeProduct {
   caffeineMgMin?: number;
   caffeineMgMax?: number;
   sourceNote?: string;
+  confidence?: string;
 }
 
 export interface ManualCoffeeInput {
@@ -39,6 +40,8 @@ export interface CaffeineIntake {
   caffeineMg: number;
   consumedAt: Date;
   servingMl?: number;
+  catalogId?: string;
+  sourceConfidence?: string;
 }
 
 export interface Scenario {
@@ -130,6 +133,8 @@ export function coffeeProductToIntake(
     caffeineMg: product.caffeineMg,
     consumedAt,
     servingMl: product.servingMl,
+    catalogId: product.id,
+    sourceConfidence: product.confidence,
   };
 }
 
