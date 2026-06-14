@@ -1,42 +1,59 @@
 import type { CaffeineSensitivity, PersonProfile } from '../domain';
 import { estimatePkParameters, type CaffeineIntake } from '../domain';
-import type { AppScenarioState, SleepSettings } from './scenario';
-import { DEFAULT_PROFILE, createDefaultSleepSettings, sanitizeLabel } from './scenario';
+import type { AppScenarioState, ScenarioState, SleepSettings } from './scenario';
+import { DEFAULT_PROFILE, createDefaultSleepSettings, migrateScenarioState, sanitizeLabel } from './scenario';
 
 export const SHARE_PARAM = 'scenario';
 export const SHARE_LABEL_PRIVACY_WARNING =
   'Share links include coffee labels and timestamps. Avoid names, locations, health details, or anything you would not want a recipient to see.';
 
 const MAX_SHARED_INTAKES = 24;
-const MAX_SHARE_BYTES = 8_192;
+const MAX_SHARE_BYTES = 12_288;
 
-export interface SharedScenarioPayload {
+interface SharedCalculationParameters {
+  weightKg: number;
+  sensitivity: CaffeineSensitivity;
+  halfLifeMinutes: number;
+  absorptionHalfLifeMinutes: number;
+  volumeDistributionLPerKg: number;
+}
+
+interface SharedIntakePayload {
+  label: string;
+  caffeineMg: number;
+  consumedAt: string;
+  servingMl?: number;
+}
+
+export interface SharedScenarioPayloadV1 {
   v: 1;
-  calcParams: {
-    weightKg: number;
-    sensitivity: CaffeineSensitivity;
-    halfLifeMinutes: number;
-    absorptionHalfLifeMinutes: number;
-    volumeDistributionLPerKg: number;
-  };
+  calcParams: SharedCalculationParameters;
+  sleep: SleepSettings & { thresholdMgPerL?: number };
+  intakes: SharedIntakePayload[];
+}
+
+export interface SharedScenarioPayloadV2 {
+  v: 2;
+  calcParams: SharedCalculationParameters;
   sleep: SleepSettings;
-  intakes: Array<{
-    label: string;
-    caffeineMg: number;
-    consumedAt: string;
-    servingMl?: number;
+  scenarios: Array<{
+    id: string;
+    name: string;
+    intakes: SharedIntakePayload[];
   }>;
 }
+
+export type SharedScenarioPayload = SharedScenarioPayloadV1 | SharedScenarioPayloadV2;
 
 export type DecodeShareResult =
   | { ok: true; state: AppScenarioState; warning?: string }
   | { ok: false; error: string };
 
-export function createSharePayload(state: AppScenarioState): SharedScenarioPayload {
+export function createSharePayload(state: AppScenarioState): SharedScenarioPayloadV2 {
   const shareSafeProfile = toShareSafeProfile(state.profile);
   const parameters = estimatePkParameters(shareSafeProfile);
   return {
-    v: 1,
+    v: 2,
     calcParams: {
       weightKg: shareSafeProfile.weightKg,
       sensitivity: shareSafeProfile.sensitivity ?? 'typical',
@@ -46,13 +63,12 @@ export function createSharePayload(state: AppScenarioState): SharedScenarioPaylo
     },
     sleep: {
       bedtime: new Date(state.sleep.bedtime).toISOString(),
-      thresholdMgPerL: state.sleep.thresholdMgPerL,
+      referenceLineMgPerL: state.sleep.referenceLineMgPerL,
     },
-    intakes: state.intakes.map((intake) => ({
-      label: sanitizeLabel(intake.label),
-      caffeineMg: intake.caffeineMg,
-      consumedAt: new Date(intake.consumedAt).toISOString(),
-      servingMl: intake.servingMl,
+    scenarios: state.scenarios.map((scenario) => ({
+      id: scenario.id,
+      name: sanitizeLabel(scenario.name),
+      intakes: scenario.intakes.map(serializeIntake),
     })),
   };
 }
@@ -90,25 +106,9 @@ export function loadShareFromUrl(search = window.location.search): DecodeShareRe
 
   try {
     const payload = decodeSharePayload(encoded);
-    const profile: PersonProfile = {
-      ...DEFAULT_PROFILE,
-      weightKg: payload.calcParams.weightKg,
-      sensitivity: payload.calcParams.sensitivity,
-      smokingStatus: 'non-smoker',
-      pregnancyStatus: 'unspecified',
-      takesOralContraceptives: false,
-    };
-    const intakes: CaffeineIntake[] = payload.intakes.map((intake, index) => ({
-      id: `shared-${index}-${new Date(intake.consumedAt).getTime()}`,
-      label: sanitizeLabel(intake.label),
-      caffeineMg: intake.caffeineMg,
-      consumedAt: new Date(intake.consumedAt),
-      servingMl: intake.servingMl,
-    }));
-
     return {
       ok: true,
-      state: { profile, intakes, sleep: payload.sleep, updatedAt: new Date().toISOString() },
+      state: sharedPayloadToState(payload),
       warning: 'Sensitive local-only profile flags were not included in this shared scenario.',
     };
   } catch (error) {
@@ -127,8 +127,62 @@ export function toShareSafeProfile(profile: PersonProfile): PersonProfile {
   };
 }
 
+function sharedPayloadToState(payload: SharedScenarioPayload): AppScenarioState {
+  const profile: PersonProfile = {
+    ...DEFAULT_PROFILE,
+    weightKg: payload.calcParams.weightKg,
+    sensitivity: payload.calcParams.sensitivity,
+    smokingStatus: 'non-smoker',
+    pregnancyStatus: 'unspecified',
+    takesOralContraceptives: false,
+  };
+
+  if (payload.v === 1) {
+    return migrateScenarioState({
+      version: 1,
+      profile,
+      intakes: payload.intakes.map(parseSharedIntake),
+      sleep: payload.sleep,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  const scenarios: ScenarioState[] = payload.scenarios.map((scenario, index) => ({
+    id: scenario.id || `scenario-${index + 1}`,
+    name: sanitizeLabel(scenario.name || `Scenario ${index + 1}`),
+    intakes: scenario.intakes.map(parseSharedIntake),
+  }));
+
+  return migrateScenarioState({
+    schemaVersion: 2,
+    profile,
+    scenarios,
+    sleep: payload.sleep,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function serializeIntake(intake: CaffeineIntake): SharedIntakePayload {
+  return {
+    label: sanitizeLabel(intake.label),
+    caffeineMg: intake.caffeineMg,
+    consumedAt: new Date(intake.consumedAt).toISOString(),
+    servingMl: intake.servingMl,
+  };
+}
+
+function parseSharedIntake(intake: SharedIntakePayload, index: number): CaffeineIntake {
+  return {
+    id: `shared-${index}-${new Date(intake.consumedAt).getTime()}`,
+    label: sanitizeLabel(intake.label),
+    caffeineMg: intake.caffeineMg,
+    consumedAt: new Date(intake.consumedAt),
+    servingMl: intake.servingMl,
+  };
+}
+
 function assertSharePayload(payload: SharedScenarioPayload) {
-  if (!payload || payload.v !== 1) throw new Error('Unsupported share payload');
+  if (!payload || (payload.v !== 1 && payload.v !== 2)) throw new Error('Unsupported share payload');
   if (!payload.calcParams || typeof payload.calcParams !== 'object') throw new Error('Missing calculation parameters');
   assertFiniteRange(payload.calcParams.weightKg, 25, 250, 'weightKg');
   if (!['low', 'typical', 'high'].includes(payload.calcParams.sensitivity)) throw new Error('Invalid sensitivity');
@@ -136,12 +190,28 @@ function assertSharePayload(payload: SharedScenarioPayload) {
   assertFiniteRange(payload.calcParams.absorptionHalfLifeMinutes, 1, 240, 'absorptionHalfLifeMinutes');
   assertFiniteRange(payload.calcParams.volumeDistributionLPerKg, 0.1, 2, 'volumeDistributionLPerKg');
 
-  if (!payload.sleep) payload.sleep = createDefaultSleepSettings();
-  if (!isValidDateString(payload.sleep.bedtime)) throw new Error('Invalid bedtime');
-  assertFiniteRange(payload.sleep.thresholdMgPerL, 0.05, 10, 'thresholdMgPerL');
+  assertSleep(payload.sleep);
+  if (payload.v === 1) {
+    assertSharedIntakes(payload.intakes);
+  } else {
+    if (!Array.isArray(payload.scenarios) || payload.scenarios.length < 2) throw new Error('Invalid scenarios');
+    for (const scenario of payload.scenarios.slice(0, 2)) {
+      if (typeof scenario.name !== 'string' || scenario.name.length > 80) throw new Error('Invalid scenario name');
+      assertSharedIntakes(scenario.intakes);
+    }
+  }
+}
 
-  if (!Array.isArray(payload.intakes) || payload.intakes.length > MAX_SHARED_INTAKES) throw new Error('Invalid intakes');
-  for (const intake of payload.intakes) {
+function assertSleep(sleep: SleepSettings | (SleepSettings & { thresholdMgPerL?: number })) {
+  if (!sleep) sleep = createDefaultSleepSettings();
+  if (!isValidDateString(sleep.bedtime)) throw new Error('Invalid bedtime');
+  const reference = sleep.referenceLineMgPerL ?? sleep.thresholdMgPerL;
+  if (reference !== undefined) assertFiniteRange(reference, 0.05, 10, 'referenceLineMgPerL');
+}
+
+function assertSharedIntakes(intakes: SharedIntakePayload[]) {
+  if (!Array.isArray(intakes) || intakes.length > MAX_SHARED_INTAKES) throw new Error('Invalid intakes');
+  for (const intake of intakes) {
     if (typeof intake.label !== 'string' || intake.label.length > 80) throw new Error('Invalid intake label');
     assertFiniteRange(intake.caffeineMg, 1, 1_000, 'caffeineMg');
     if (!isValidDateString(intake.consumedAt)) throw new Error('Invalid consumedAt');
