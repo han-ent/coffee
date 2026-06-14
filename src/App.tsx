@@ -82,8 +82,16 @@ export function App() {
   function handleShare() {
     const nextShareUrl = createShareUrl(state);
     setShareUrl(nextShareUrl);
-    void navigator.clipboard?.writeText(nextShareUrl).catch(() => undefined);
-    setNotice('Share link created. Sensitive local-only flags were excluded.');
+
+    if (!navigator.clipboard) {
+      setNotice('Share link created. Copy it manually below; sensitive local-only flags were excluded.');
+      return;
+    }
+
+    void navigator.clipboard
+      .writeText(nextShareUrl)
+      .then(() => setNotice('Share link copied. Sensitive local-only flags were excluded.'))
+      .catch(() => setNotice('Share link created, but clipboard copy was blocked. Copy it manually below.'));
   }
 
   function handleReset() {
