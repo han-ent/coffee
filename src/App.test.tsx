@@ -45,6 +45,8 @@ describe('App shell', () => {
     expect(within(scenarioTwo).getByText('Scenario two espresso')).toBeInTheDocument();
     expect(within(scenarioTwo).getByText('95 mg')).toBeInTheDocument();
     expect(screen.getByText(/Add coffee to Scenario 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/Time since last caffeine at bedtime/i).parentElement).toHaveTextContent(/h/);
+    expect(screen.getByText(/Time since last caffeine at bedtime/i).parentElement).not.toHaveTextContent(/No caffeine yet/i);
     expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);

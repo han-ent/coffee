@@ -76,6 +76,7 @@ describe('share payload privacy contract', () => {
     const url = createShareUrl(state, 'https://example.test/app?old=1');
     const result = loadShareFromUrl(new URL(url).search);
 
+    expect(new URL(url).searchParams.has('old')).toBe(false);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.state.schemaVersion).toBe(2);

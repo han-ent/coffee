@@ -95,6 +95,7 @@ export function decodeSharePayload(encoded: string): SharedScenarioPayload {
 
 export function createShareUrl(state: AppScenarioState, baseHref = window.location.href): string {
   const url = new URL(baseHref);
+  url.search = '';
   url.searchParams.set(SHARE_PARAM, encodeSharePayload(createSharePayload(state)));
   return url.toString();
 }

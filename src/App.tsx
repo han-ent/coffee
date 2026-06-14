@@ -77,7 +77,8 @@ export function App() {
   const [weightDraft, setWeightDraft] = useState(String(initialLoad.state.profile.weightKg));
 
   useEffect(() => {
-    saveScenarioState(state);
+    const saved = saveScenarioState(state);
+    if (!saved.ok) setNotice(`Local save unavailable: ${saved.error}`);
   }, [state]);
 
   useEffect(() => {
@@ -125,7 +126,7 @@ export function App() {
   })), [simulations, state.scenarios]);
   const bedtime = new Date(state.sleep.bedtime);
   const bedtimeResiduals = scenarioModels.map((scenario) => concentrationAt(state.profile, scenario.intakes, bedtime));
-  const latestIntakeTime = Math.max(...allIntakeDates, Number.NaN);
+  const latestIntakeTime = allIntakeDates.length ? Math.max(...allIntakeDates) : Number.NaN;
   const minutesSinceLastCaffeineAtBedtime = Number.isFinite(latestIntakeTime) ? (bedtime.getTime() - latestIntakeTime) / 60_000 : Number.NaN;
 
   function commitWeight() {

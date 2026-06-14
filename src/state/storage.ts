@@ -7,9 +7,19 @@ export type LoadResult =
   | { ok: true; state: AppScenarioState; recovered: false }
   | { ok: false; state: AppScenarioState; recovered: true; error: string };
 
+export type SaveResult = { ok: true } | { ok: false; error: string };
+
 export function saveScenarioState(state: AppScenarioState, storage = resolveStorage()) {
-  if (!storage) return;
-  storage.setItem(STORAGE_KEY, JSON.stringify(serializeState(state)));
+  try {
+    if (!storage) return { ok: true } as const;
+    storage.setItem(STORAGE_KEY, JSON.stringify(serializeState(state)));
+    return { ok: true } as const;
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Could not save local scenario',
+    } as const;
+  }
 }
 
 export function loadScenarioState(storage = resolveStorage()): LoadResult {

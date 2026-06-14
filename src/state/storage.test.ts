@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addManualIntake, createDefaultScenarioState, loadScenarioState, saveScenarioState } from './index';
+import { addManualIntake, createDefaultScenarioState, loadScenarioState, removeIntake, saveScenarioState } from './index';
 
 function memoryStorage(seed?: string) {
   const store = new Map<string, string>();
@@ -18,7 +18,7 @@ describe('local scenario persistence', () => {
     state.profile.takesOralContraceptives = true;
     state.sleep.referenceLineMgPerL = 0.6;
 
-    saveScenarioState(state, storage);
+    expect(saveScenarioState(state, storage).ok).toBe(true);
     const loaded = loadScenarioState(storage);
 
     expect(loaded.ok).toBe(true);
@@ -28,6 +28,20 @@ describe('local scenario persistence', () => {
     expect(loaded.state.scenarios[0].name).toBe('Scenario 1');
     expect(loaded.state.scenarios[1].intakes[0].caffeineMg).toBe(100);
     expect(loaded.state.sleep.referenceLineMgPerL).toBe(0.6);
+  });
+
+  it('reports storage write failures without throwing', () => {
+    const storage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('quota exceeded');
+      },
+    };
+
+    const result = saveScenarioState(createDefaultScenarioState(), storage);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/quota exceeded/i);
   });
 
   it('migrates v1 local storage into Scenario 1 and a Scenario 2 comparison clone', () => {
@@ -46,6 +60,19 @@ describe('local scenario persistence', () => {
     expect(loaded.state.scenarios[0].intakes[0].label).toBe('Legacy mug');
     expect(loaded.state.scenarios[1].intakes[0].label).toBe('Legacy mug');
     expect(loaded.state.sleep.referenceLineMgPerL).toBe(0.8);
+  });
+
+  it('keeps same-timestamp manual intakes independently removable', () => {
+    const consumedAt = new Date('2026-06-14T08:00:00.000Z');
+    const withFirst = addManualIntake(createDefaultScenarioState(), 'scenario-1', 'Manual', 100, consumedAt);
+    const withSecond = addManualIntake(withFirst, 'scenario-1', 'Manual', 100, consumedAt);
+    const ids = withSecond.scenarios[0].intakes.map((intake) => intake.id);
+
+    expect(new Set(ids).size).toBe(2);
+
+    const afterRemove = removeIntake(withSecond, 'scenario-1', ids[0]);
+    expect(afterRemove.scenarios[0].intakes).toHaveLength(1);
+    expect(afterRemove.scenarios[0].intakes[0].id).toBe(ids[1]);
   });
 
   it('recovers to defaults when stored JSON is malformed', () => {

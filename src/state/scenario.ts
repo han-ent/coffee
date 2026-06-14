@@ -110,7 +110,7 @@ export function addCatalogIntake(
   const intake = coffeeProductToIntake(
     typeof override === 'number' && override > 0 ? { ...product, caffeineMg: override } : product,
     consumedAt,
-    `${scenarioId}-${catalogId}-${consumedAt.getTime()}`,
+    createIntakeId(state, scenarioId, catalogId, consumedAt),
   );
 
   return appendIntake(state, scenarioId, intake);
@@ -132,7 +132,7 @@ export function addManualIntake(
   return appendIntake(
     state,
     scenarioId,
-    makeManualCoffeeIntake({ label: sanitizeLabel(label), caffeineMg }, consumedAt, `${scenarioId}-manual-${consumedAt.getTime()}`),
+    makeManualCoffeeIntake({ label: sanitizeLabel(label), caffeineMg }, consumedAt, createIntakeId(state, scenarioId, 'manual', consumedAt)),
   );
 }
 
@@ -181,6 +181,15 @@ export function sanitizeLabel(label: string): string {
 
 function appendIntake(state: AppScenarioState, scenarioId: string, intake: CaffeineIntake): AppScenarioState {
   return updateScenario(state, scenarioId, (scenario) => ({ ...scenario, intakes: [...scenario.intakes, intake] }));
+}
+
+function createIntakeId(state: AppScenarioState, scenarioId: string, sourceId: string, consumedAt: Date): string {
+  const base = `${scenarioId}-${sourceId}-${consumedAt.getTime()}`;
+  const existingIds = new Set(getScenarioState(state, scenarioId).intakes.map((intake) => intake.id));
+  if (!existingIds.has(base)) return base;
+  let suffix = 2;
+  while (existingIds.has(`${base}-${suffix}`)) suffix += 1;
+  return `${base}-${suffix}`;
 }
 
 function updateScenario(
