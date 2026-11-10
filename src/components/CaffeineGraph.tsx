@@ -78,13 +78,14 @@ export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, doses = []
         onPointerDown={handlePointer}
       >
         <defs>
-          <linearGradient id="goldStroke" x1="0" x2="1">
-            <stop offset="0%" stopColor="#f7d99e" />
-            <stop offset="100%" stopColor="#c47a33" />
+          <linearGradient id="areaGold" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#c4a36a" stopOpacity="0.42" />
+            <stop offset="72%" stopColor="#c4a36a" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="#c4a36a" stopOpacity="0" />
           </linearGradient>
-          <linearGradient id="blueStroke" x1="0" x2="1">
-            <stop offset="0%" stopColor="#bad5ff" />
-            <stop offset="100%" stopColor="#6e8ce8" />
+          <linearGradient id="areaBlue" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#8d7352" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#8d7352" stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -108,11 +109,8 @@ export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, doses = []
         <line x1={chart.bedtimeX} x2={chart.bedtimeX} y1={padding.top} y2={height - padding.bottom} className="bedtime-line" />
         <text x={chart.bedtimeX - 8} y={padding.top + 16} textAnchor="end" className="marker-label">취침</text>
 
-        {chart.doseMarkers.map((marker) => (
-          <g key={marker.id} role="img" aria-label={`섭취 표시 ${marker.label}`}>
-            <line x1={marker.x} x2={marker.x} y1={height - padding.bottom - 10} y2={height - padding.bottom} className="dose-marker" />
-            <circle cx={marker.x} cy={height - padding.bottom - 12} r="3.5" className="dose-marker" />
-          </g>
+        {chart.paths.map((path) => (
+          path.areaD ? <path key={`${path.id}-area`} d={path.areaD} className={`series-area ${path.tone}`} /> : null
         ))}
 
         {chart.paths.map((path) => (
@@ -121,6 +119,13 @@ export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, doses = []
 
         {chart.paths.map((path) => (
           <path key={path.id} d={path.d} className={`series-line ${path.tone}`} fill="none" />
+        ))}
+
+        {chart.doseMarkers.map((marker) => (
+          <g key={marker.id} role="img" aria-label={`섭취 표시 ${marker.label}`}>
+            <line x1={marker.x} x2={marker.x} y1={marker.y} y2={height - padding.bottom} className="dose-stem" />
+            <circle cx={marker.x} cy={marker.y} r="4.2" className="dose-dot" />
+          </g>
         ))}
 
         <line x1={chart.inspectX(inspection.index)} x2={chart.inspectX(inspection.index)} y1={padding.top} y2={height - padding.bottom} className="inspect-line" />
@@ -166,7 +171,7 @@ export function buildChartModel(series: GraphSeries[], bedtime: Date, referenceL
     bedtimeX: xScale(bedtimeElapsed),
     doseMarkers: doses.map((dose) => {
       const elapsed = (dose.consumedAt.getTime() - startTimestamp) / 60_000;
-      return { id: dose.id, label: dose.label, x: xScale(elapsed) };
+      return { id: dose.id, label: dose.label, x: xScale(elapsed), y: yOnCurve(series[0]?.points ?? [], elapsed, yScale) };
     }).filter((marker) => marker.x >= padding.left - 4 && marker.x <= width - padding.right + 4),
     yTicks: [0, concentrationMax / 3, (concentrationMax * 2) / 3, concentrationMax].map((value) => ({ value, y: yScale(value) })),
     xTicks: [elapsedMin, elapsedMin + (elapsedMax - elapsedMin) / 3, elapsedMin + ((elapsedMax - elapsedMin) * 2) / 3, elapsedMax].map((value) => ({ value, x: xScale(value) })),
@@ -174,6 +179,7 @@ export function buildChartModel(series: GraphSeries[], bedtime: Date, referenceL
       id: item.id,
       tone: item.tone,
       d: pathForPoints(item.points, xScale, yScale),
+      areaD: areaPathForPoints(item.points, xScale, yScale),
       bandD: bandPathForPoints(item.points, xScale, yScale),
       label: item.label,
     })),
@@ -187,6 +193,37 @@ export function indexFromRatio(ratio: number, pointCount: number) {
 export function pointerRatio(clientX: number, left: number, rectWidth: number) {
   if (rectWidth <= 0) return 0;
   return Math.max(0, Math.min(1, (clientX - left) / rectWidth));
+}
+
+function yOnCurve(
+  points: ConcentrationPoint[],
+  elapsedMinutes: number,
+  yScale: (mgPerL: number) => number,
+) {
+  if (!points.length) return yScale(0);
+  let nearest = points[0];
+  let best = Infinity;
+  for (const point of points) {
+    const delta = Math.abs(point.elapsedMinutes - elapsedMinutes);
+    if (delta < best) {
+      best = delta;
+      nearest = point;
+    }
+  }
+  return yScale(nearest.concentrationMgPerL);
+}
+
+function areaPathForPoints(
+  points: ConcentrationPoint[],
+  xScale: (elapsedMinutes: number) => number,
+  yScale: (mgPerL: number) => number,
+) {
+  if (!points.length) return '';
+  const line = pathForPoints(points, xScale, yScale);
+  const first = points[0];
+  const last = points[points.length - 1];
+  const base = yScale(0);
+  return `${line} L ${xScale(last.elapsedMinutes).toFixed(2)} ${base.toFixed(2)} L ${xScale(first.elapsedMinutes).toFixed(2)} ${base.toFixed(2)} Z`;
 }
 
 function pathForPoints(

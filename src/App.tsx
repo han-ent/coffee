@@ -33,6 +33,41 @@ import {
 import './styles/tokens.css';
 import './styles/global.css';
 
+function DrinkMark({ id }: { id: string }) {
+  const shared = {
+    viewBox: '0 0 24 24',
+    width: 18,
+    height: 18,
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.4,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+    className: 'chip-mark',
+  };
+  if (id === 'espresso') {
+    return <svg {...shared}><path d="M9 9h5.2v5.2a2.6 2.6 0 0 1-5.2 0V9z" /><path d="M14.2 10.4h1.6a1.4 1.4 0 0 1 0 2.8h-1.6" /><path d="M7.5 18.5h8" /></svg>;
+  }
+  if (id === 'cold-brew') {
+    return <svg {...shared}><path d="M8.5 6.5h7v12.2a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2V6.5z" /><path d="M8.5 10.5h7" /></svg>;
+  }
+  if (id === 'latte') {
+    return <svg {...shared}><path d="M7.5 8h7.2v8.2a3.2 3.2 0 0 1-6.4 0V8z" /><path d="M14.7 10h1.8a1.6 1.6 0 0 1 0 3.2h-1.8" /><path d="M8.4 11.2h5.2" /></svg>;
+  }
+  if (id === 'energy') {
+    return <svg {...shared}><path d="M9 4.5h6l-.6 15H9.6L9 4.5z" /><path d="M9.4 9h5.2" /></svg>;
+  }
+  if (id === 'green-tea') {
+    return <svg {...shared}><path d="M5 15.5c3.2-6 7.2-8 14-8-1.2 6.4-5.2 10-10.4 10C6.6 17.5 5.4 16.6 5 15.5z" /><path d="M12 13.2c.4-2.2 1.6-3.8 3.4-4.8" /></svg>;
+  }
+  if (id === 'custom') {
+    return <svg {...shared}><circle cx="12" cy="12" r="7" /><path d="M12 8.5v7M8.5 12h7" /></svg>;
+  }
+  const tall = id === 'americano-grande';
+  return <svg {...shared}><path d={tall ? 'M7 6.5h8v10.2a3.4 3.4 0 0 1-6.8 0V6.5z' : 'M8 8h7v8.4a3 3 0 0 1-6 0V8z'} /><path d={tall ? 'M15 8.4h2.1a1.8 1.8 0 0 1 0 3.6H15' : 'M15 10h1.8a1.5 1.5 0 0 1 0 3H15'} /></svg>;
+}
+
 function toLocalInputValue(date: Date) {
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return offsetDate.toISOString().slice(0, 16);
@@ -313,15 +348,22 @@ export function App() {
             key={preset.id}
             type="button"
             className="chip"
+            aria-label={`${preset.label} ${preset.caffeineMg} mg`}
             aria-pressed={lastPresetId === preset.id}
             onClick={() => addPreset(preset.id, preset.label, preset.caffeineMg)}
           >
-            {preset.label}{' '}
-            <span className="chip-mg">{preset.caffeineMg} mg</span>
+            <DrinkMark id={preset.id} />
+            <span className="chip-text">
+              <span className="chip-name">{preset.label}</span>
+              <span className="chip-mg"> {preset.caffeineMg} mg</span>
+            </span>
           </button>
         ))}
         <button type="button" className="chip" aria-pressed={customOpen} aria-expanded={customOpen} onClick={() => setCustomOpen((open) => !open)}>
-          직접 입력
+          <DrinkMark id="custom" />
+          <span className="chip-text">
+            <span className="chip-name">직접 입력</span>
+          </span>
         </button>
       </div>
 
@@ -363,7 +405,7 @@ export function App() {
       {notice ? <p className="notice" role="status">{notice}</p> : null}
 
       <section className="summary" aria-label="요약">
-        <article className="summary-card" aria-label="현재 체내 농도">
+        <article className="summary-card summary-hero" aria-label="현재 체내 농도">
           <p>현재 체내 농도</p>
           <strong>{currentMg === null ? '기록 없음' : formatConcentration(currentMg)}</strong>
           {currentMg !== null && currentMg < 0.05 ? <span className="hint">방금 마신 양은 아직 거의 흡수되지 않았습니다.</span> : null}
@@ -372,7 +414,7 @@ export function App() {
           <p>참고선 {reference.toFixed(1)} mg/L 아래</p>
           <strong>{dropText}</strong>
         </article>
-        <article className={`summary-card${verdict === '주의' ? ' caution' : ''}`} aria-label="취침 판정">
+        <article className={`summary-card summary-verdict${verdict === '주의' ? ' caution' : ''}`} aria-label="취침 판정">
           <p>취침 {clock}</p>
           <strong>{verdict ? `취침 ${clock}이면 ${verdict}` : '기록 없음'}</strong>
           {bedtimeMg !== null ? <span className="hint">취침 때 약 {bedtimeMg.toFixed(1)} mg/L</span> : null}
