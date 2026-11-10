@@ -9,8 +9,8 @@ export const DRINK_PRESETS: DrinkPreset[] = [
   { id: 'americano-tall', label: '아메리카노 톨', caffeineMg: 150 },
   { id: 'americano-grande', label: '아메리카노 그란데', caffeineMg: 225 },
   { id: 'espresso', label: '에스프레소 1샷', caffeineMg: 75 },
-  { id: 'cold-brew', label: '콜드브루', caffeineMg: 200 },
-  { id: 'latte', label: '카페라테', caffeineMg: 150 },
+  { id: 'cold-brew', label: '콜드브루', caffeineMg: 155 },
+  { id: 'latte', label: '카페라테', caffeineMg: 75 },
   { id: 'energy', label: '에너지드링크', caffeineMg: 80 },
   { id: 'green-tea', label: '녹차', caffeineMg: 30 },
 ];

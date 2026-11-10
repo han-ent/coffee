@@ -85,7 +85,11 @@ describe('share payload privacy contract', () => {
       expect(result.state.profile.smokingStatus).toBe('non-smoker');
       expect(result.state.profile.pregnancyStatus).toBe('unspecified');
       expect(result.state.profile.takesOralContraceptives).toBe(false);
-      expect(result.state.sleep).toEqual({ bedtime: '2026-06-14T22:15:00.000Z', referenceLineMgPerL: 0.6 });
+      expect(result.state.sleep).toEqual({
+        bedtime: '2026-06-14T22:15:00.000Z',
+        referenceLineMgPerL: 0.6,
+        referenceLineManual: true,
+      });
       expect(result.state.scenarios[1].intakes[0].label).toBe('Vertuo mug');
       expect(result.warning).toMatch(/Sensitive local-only/i);
     }

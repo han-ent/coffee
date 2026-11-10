@@ -624,6 +624,12 @@ h2 {
   width: 100%;
 }
 
+.reference-caption {
+  margin: 8px 2px 0;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
 .disclaimer {
   margin: 22px 0 0;
   color: var(--color-muted);

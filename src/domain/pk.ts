@@ -33,19 +33,34 @@ export function estimatePkParameters(profile: PersonProfile): PharmacokineticPar
   let halfLifeMinutes = DEFAULT_PK_PARAMETERS.halfLifeMinutes;
   const assumptions: number[] = [];
 
-  if (profile.smokingStatus === 'smoker') assumptions.push(0.7);
-  if (profile.sensitivity === 'low') assumptions.push(0.85);
-  if (profile.sensitivity === 'high') assumptions.push(1.25);
+  if (profile.smokingStatus === 'smoker') assumptions.push(0.6);
   if (profile.takesOralContraceptives) assumptions.push(1.45);
-  if (profile.pregnancyStatus === 'pregnant-or-postpartum') assumptions.push(1.8);
+  const pregnancyFactor = pregnancyHalfLifeFactor(profile.pregnancyStatus);
+  if (pregnancyFactor) assumptions.push(pregnancyFactor);
   if (profile.ageYears !== undefined && profile.ageYears >= 65) assumptions.push(1.15);
 
   for (const modifier of assumptions) halfLifeMinutes *= modifier;
 
   return {
     ...DEFAULT_PK_PARAMETERS,
-    halfLifeMinutes: clamp(halfLifeMinutes, 120, 900),
+    halfLifeMinutes: clamp(halfLifeMinutes, 120, 1_200),
   };
+}
+
+export function pregnancyHalfLifeFactor(status: PersonProfile['pregnancyStatus']): number | null {
+  switch (status) {
+    case 'first-trimester':
+      return 1.4;
+    case 'second-trimester':
+    case 'pregnant-or-postpartum':
+      return 2.3;
+    case 'third-trimester':
+      return 3;
+    case 'postpartum-12-weeks':
+      return 1.5;
+    default:
+      return null;
+  }
 }
 
 export function createAssumptionNotes(profile: PersonProfile, parameters = estimatePkParameters(profile)): string[] {
@@ -55,11 +70,10 @@ export function createAssumptionNotes(profile: PersonProfile, parameters = estim
     `Uncertainty band combines half-life range and dose variability; caffeine labels and individual metabolism can differ substantially.`,
   ];
 
-  if (profile.sensitivity === 'high') notes.push('High sensitivity lengthens the modeled half-life as a conservative sleep-planning approximation.');
-  if (profile.sensitivity === 'low') notes.push('Low sensitivity shortens the modeled half-life as an approximate profile effect.');
+  if (profile.sensitivity === 'high' || profile.sensitivity === 'low') notes.push('Sensitivity shifts the planning reference line and does not change half-life.');
   if (profile.smokingStatus === 'smoker') notes.push('Smoking status shortens the modeled half-life to reflect faster average clearance.');
   if (profile.takesOralContraceptives) notes.push('Oral contraceptive flag lengthens the modeled half-life.');
-  if (profile.pregnancyStatus === 'pregnant-or-postpartum') notes.push('Pregnancy/postpartum flag uses a much longer half-life; treat results as especially approximate and non-medical.');
+  if (pregnancyHalfLifeFactor(profile.pregnancyStatus)) notes.push('Pregnancy or early postpartum lengthens the modeled half-life; treat results as especially approximate and non-medical.');
 
   return notes;
 }
@@ -81,11 +95,11 @@ export function simulateScenario(scenario: Scenario, options: SimulationOptions)
 
   const lowParameters: PharmacokineticParameters = {
     ...baseParameters,
-    halfLifeMinutes: Math.max(90, baseParameters.halfLifeMinutes * 0.65),
+    halfLifeMinutes: baseParameters.halfLifeMinutes * 0.55,
   };
   const highParameters: PharmacokineticParameters = {
     ...baseParameters,
-    halfLifeMinutes: Math.min(1_200, baseParameters.halfLifeMinutes * 1.45),
+    halfLifeMinutes: baseParameters.halfLifeMinutes * 2,
   };
 
   const points: ConcentrationPoint[] = [];

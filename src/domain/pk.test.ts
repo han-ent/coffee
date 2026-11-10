@@ -99,8 +99,29 @@ describe('caffeine PK domain model', () => {
     const heavyConcentration = concentrationAt(heavyProfile, [intake('same dose', 100)], at).concentrationMgPerL;
 
     expect(lightConcentration).toBeGreaterThan(heavyConcentration);
-    expect(estimatePkParameters(sensitiveProfile).halfLifeMinutes).toBeGreaterThan(estimatePkParameters(typicalProfile).halfLifeMinutes);
-    expect(estimatePkParameters(smokerProfile).halfLifeMinutes).toBeLessThan(estimatePkParameters(typicalProfile).halfLifeMinutes);
+    expect(estimatePkParameters(sensitiveProfile).halfLifeMinutes).toBe(estimatePkParameters(typicalProfile).halfLifeMinutes);
+    expect(estimatePkParameters(smokerProfile).halfLifeMinutes).toBeCloseTo(180, 5);
+    expect(DEFAULT_PK_PARAMETERS.absorptionHalfLifeMinutes).toBe(12);
+    expect(DEFAULT_PK_PARAMETERS.volumeDistributionLPerKg).toBe(0.7);
+  });
+
+  it('lengthens half-life by pregnancy stage without cutting the third trimester at the old 900 minute cap', () => {
+    expect(estimatePkParameters({ ...typicalProfile, pregnancyStatus: 'first-trimester' }).halfLifeMinutes).toBeCloseTo(420, 5);
+    expect(estimatePkParameters({ ...typicalProfile, pregnancyStatus: 'second-trimester' }).halfLifeMinutes).toBeCloseTo(690, 5);
+    expect(estimatePkParameters({ ...typicalProfile, pregnancyStatus: 'pregnant-or-postpartum' }).halfLifeMinutes).toBeCloseTo(690, 5);
+    expect(estimatePkParameters({ ...typicalProfile, pregnancyStatus: 'postpartum-12-weeks' }).halfLifeMinutes).toBeCloseTo(450, 5);
+
+    const third = estimatePkParameters({ ...typicalProfile, pregnancyStatus: 'third-trimester' });
+    expect(third.halfLifeMinutes).toBeCloseTo(900, 5);
+    expect(third.halfLifeMinutes).toBeLessThanOrEqual(1_200);
+
+    const combined = estimatePkParameters({
+      ...typicalProfile,
+      pregnancyStatus: 'third-trimester',
+      takesOralContraceptives: true,
+      ageYears: 70,
+    });
+    expect(combined.halfLifeMinutes).toBe(1_200);
   });
 
   it('includes non-medical assumption content in simulation output', () => {
@@ -110,7 +131,7 @@ describe('caffeine PK domain model', () => {
     );
 
     expect(result.disclaimer).toBe(NON_MEDICAL_DISCLAIMER);
-    expect(result.disclaimer).toMatch(/not medical advice/i);
+    expect(result.disclaimer).toMatch(/의학적 조언이 아닙니다/);
     expect(result.assumptions.join(' ')).toMatch(/one-compartment/i);
     expect(result.assumptions.join(' ')).toMatch(/uncertainty band/i);
   });

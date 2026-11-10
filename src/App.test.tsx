@@ -17,8 +17,11 @@ describe('카페인 타이머', () => {
     expect(screen.getByRole('button', { name: /아메리카노 톨 150 mg/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /아메리카노 그란데 225 mg/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /에스프레소 1샷 75 mg/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /콜드브루 200 mg/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /카페라테 150 mg/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /콜드브루 155 mg/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /카페라테 75 mg/ })).toBeInTheDocument();
+    expect(screen.getByText('스타벅스 Tall 기준 참고값 · 용량은 참고값입니다.')).toBeInTheDocument();
+    expect(screen.getByText('참고선은 보수적으로 잡은 값입니다')).toBeInTheDocument();
+    expect(screen.getByText(/약물·간질환·임신/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /에너지드링크 80 mg/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /녹차 30 mg/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '직접 입력' })).toBeInTheDocument();
@@ -111,6 +114,13 @@ describe('카페인 타이머', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/25–250 kg/);
     expect(screen.getByLabelText('체중')).toHaveValue('62');
     expect(screen.getByRole('img', { name: /시간에 따른 카페인 농도/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('민감도'), { target: { value: 'high' } });
+    expect(screen.getByLabelText('참고선')).toHaveValue(0.5);
+    fireEvent.change(screen.getByLabelText('참고선'), { target: { value: '0.8' } });
+    fireEvent.change(screen.getByLabelText('민감도'), { target: { value: 'low' } });
+    expect(screen.getByLabelText('참고선')).toHaveValue(0.8);
+    expect(screen.getByText(/참고선을 직접 고치면 그 값을 유지합니다/)).toBeInTheDocument();
   });
 
   it('adds a curated capsule from the collapsed Korean picker', async () => {

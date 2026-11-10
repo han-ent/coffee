@@ -8,7 +8,7 @@ import {
   getCatalogSystems,
 } from './catalog/vertuo';
 import { CaffeineGraph, type GraphSeries } from './components/CaffeineGraph';
-import { concentrationAt, simulateScenario } from './domain';
+import { NON_MEDICAL_DISCLAIMER, concentrationAt, simulateScenario } from './domain';
 import {
   DRINK_PRESETS,
   bedtimeVerdict,
@@ -18,6 +18,7 @@ import {
 } from './planner';
 import {
   activeBedtimeClock,
+  referenceForSensitivity,
   addCatalogIntake,
   addManualIntake,
   isClockTime,
@@ -66,6 +67,17 @@ function DrinkMark({ id }: { id: string }) {
   }
   const tall = id === 'americano-grande';
   return <svg {...shared}><path d={tall ? 'M7 6.5h8v10.2a3.4 3.4 0 0 1-6.8 0V6.5z' : 'M8 8h7v8.4a3 3 0 0 1-6 0V8z'} /><path d={tall ? 'M15 8.4h2.1a1.8 1.8 0 0 1 0 3.6H15' : 'M15 10h1.8a1.5 1.5 0 0 1 0 3H15'} /></svg>;
+}
+
+function pregnancySelectValue(status: AppScenarioState['profile']['pregnancyStatus']) {
+  if (
+    status === 'first-trimester'
+    || status === 'second-trimester'
+    || status === 'third-trimester'
+    || status === 'postpartum-12-weeks'
+    || status === 'not-pregnant'
+  ) return status;
+  return status === 'pregnant-or-postpartum' ? 'second-trimester' : 'not-pregnant';
 }
 
 function toLocalInputValue(date: Date) {
@@ -272,7 +284,17 @@ export function App() {
             <select
               aria-label="민감도"
               value={state.profile.sensitivity ?? 'typical'}
-              onChange={(event) => setState((current) => updateProfile(current, { sensitivity: event.target.value as AppScenarioState['profile']['sensitivity'] }))}
+              onChange={(event) => {
+                const sensitivity = event.target.value as AppScenarioState['profile']['sensitivity'];
+                setState((current) => {
+                  const next = updateProfile(current, { sensitivity });
+                  if (current.sleep.referenceLineManual) return next;
+                  return updateSleepSettings(next, {
+                    referenceLineMgPerL: referenceForSensitivity(sensitivity),
+                    referenceLineManual: false,
+                  });
+                });
+              }}
             >
               <option value="low">낮음</option>
               <option value="typical">보통</option>
@@ -294,12 +316,14 @@ export function App() {
             임신·산후
             <select
               aria-label="임신·산후"
-              value={state.profile.pregnancyStatus ?? 'not-pregnant'}
+              value={pregnancySelectValue(state.profile.pregnancyStatus)}
               onChange={(event) => setState((current) => updateProfile(current, { pregnancyStatus: event.target.value as AppScenarioState['profile']['pregnancyStatus'] }))}
             >
-              <option value="not-pregnant">해당 없음</option>
-              <option value="pregnant-or-postpartum">임신·산후</option>
-              <option value="unspecified">말하지 않음</option>
+              <option value="not-pregnant">없음</option>
+              <option value="first-trimester">임신 1분기</option>
+              <option value="second-trimester">임신 2분기</option>
+              <option value="third-trimester">임신 3분기</option>
+              <option value="postpartum-12-weeks">출산 후 12주 이내</option>
             </select>
           </label>
           <label className="settings-row">
@@ -333,15 +357,16 @@ export function App() {
               onChange={(event) => {
                 const referenceLineMgPerL = parsePositiveNumber(event.target.value);
                 if (referenceLineMgPerL && referenceLineMgPerL <= 10) {
-                  setState((current) => updateSleepSettings(current, { referenceLineMgPerL }));
+                  setState((current) => updateSleepSettings(current, { referenceLineMgPerL, referenceLineManual: true }));
                 }
               }}
             />
           </label>
+          <p className="hint">민감도는 반감기가 아니라 참고선을 바꿉니다. 참고선을 직접 고치면 그 값을 유지합니다.</p>
         </section>
       ) : null}
 
-      <p className="reference-note">용량은 참고값입니다.</p>
+      <p className="reference-note">스타벅스 Tall 기준 참고값 · 용량은 참고값입니다.</p>
       <div className="chips" aria-label="한 번에 기록">
         {DRINK_PRESETS.map((preset) => (
           <button
@@ -420,6 +445,7 @@ export function App() {
           {bedtimeMg !== null ? <span className="hint">취침 때 약 {bedtimeMg.toFixed(1)} mg/L</span> : null}
         </article>
       </section>
+      <p className="reference-caption">참고선은 보수적으로 잡은 값입니다</p>
 
       <ul className="dose-list" aria-label="오늘 기록">
         {listed.length === 0 ? <li className="empty">아직 기록이 없습니다.</li> : listed.map((intake) => (
@@ -483,9 +509,7 @@ export function App() {
         ) : null}
       </section>
 
-      <p className="disclaimer">
-        교육용 추정치이며 의학적 조언이 아닙니다. 진단이나 치료도 아니며, 개인 대사는 크게 다를 수 있습니다. 표시된 mg는 계획용 참고값입니다. 건강이 걱정되면 전문가와 상의하세요.
-      </p>
+      <p className="disclaimer">{NON_MEDICAL_DISCLAIMER}</p>
     </main>
   );
 }
