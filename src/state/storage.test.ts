@@ -28,6 +28,7 @@ describe('local scenario persistence', () => {
     expect(loaded.state.scenarios[0].name).toBe('Scenario 1');
     expect(loaded.state.scenarios[1].intakes[0].caffeineMg).toBe(100);
     expect(loaded.state.sleep.referenceLineMgPerL).toBe(0.6);
+    expect(loaded.state.sleep.bedtimeClock).toBe('23:00');
   });
 
   it('preserves catalog provenance for stored catalog intakes', () => {

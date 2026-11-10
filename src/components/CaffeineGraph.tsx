@@ -13,10 +13,17 @@ export interface GraphInspection {
   elapsedMinutes: number;
 }
 
+export interface GraphDose {
+  id: string;
+  label: string;
+  consumedAt: Date;
+}
+
 export interface CaffeineGraphProps {
   series: GraphSeries[];
   bedtime: Date;
   referenceLineMgPerL: number;
+  doses?: GraphDose[];
   onInspect?: (inspection: GraphInspection) => void;
 }
 
@@ -26,12 +33,19 @@ const padding = { top: 24, right: 34, bottom: 42, left: 58 };
 const plotWidth = width - padding.left - padding.right;
 const plotHeight = height - padding.top - padding.bottom;
 
-export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, onInspect }: CaffeineGraphProps) {
-  const chart = useMemo(() => buildChartModel(series, bedtime, referenceLineMgPerL), [series, bedtime, referenceLineMgPerL]);
+export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, doses = [], onInspect }: CaffeineGraphProps) {
+  const chart = useMemo(() => buildChartModel(series, bedtime, referenceLineMgPerL, doses), [series, bedtime, referenceLineMgPerL, doses]);
   const [inspection, setInspection] = useState<GraphInspection>(() => ({ index: 0, elapsedMinutes: chart.elapsedDomain[0] }));
   const inspected = useMemo(() => inspectSeriesAt(series, inspection.index), [series, inspection.index]);
 
   function handlePointer(event: PointerEvent<SVGSVGElement>) {
+    if (event.type === 'pointerdown') {
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Pointer capture is a touch convenience; inspection still follows the event.
+      }
+    }
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio = pointerRatio(event.clientX, rect.left, rect.width);
     const index = indexFromRatio(ratio, chart.maxPointCount);
@@ -42,22 +56,24 @@ export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, onInspect 
   }
 
   return (
-    <section className="graph-card" aria-label="Caffeine concentration graph">
+    <section className="graph-card" aria-label="카페인 농도 그래프">
       <div className="graph-header">
         <div>
-          <p className="eyebrow">Interactive forecast</p>
-          <h2>Time–concentration curve</h2>
+          <p className="eyebrow">점선은 수면 참고선</p>
+          <h2>오늘 곡선</h2>
         </div>
-        <div className="legend" aria-label="Graph legend">
-          {series.map((item) => <span key={item.id} className={`legend-dot ${item.tone}`}>{item.label}</span>)}
-        </div>
+        {series.length > 1 ? (
+          <div className="legend" aria-label="그래프 범례">
+            {series.map((item) => <span key={item.id} className={`legend-dot ${item.tone}`}>{item.label}</span>)}
+          </div>
+        ) : null}
       </div>
 
       <svg
         className="caffeine-graph"
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Caffeine concentration over time with reference line and bedtime markers"
+        aria-label="시간에 따른 카페인 농도와 참고선, 취침, 섭취 표시"
         onPointerMove={handlePointer}
         onPointerDown={handlePointer}
       >
@@ -87,13 +103,20 @@ export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, onInspect 
         ))}
 
         <line x1={padding.left} x2={width - padding.right} y1={chart.thresholdY} y2={chart.thresholdY} className="threshold-line" />
-        <text x={width - padding.right} y={chart.thresholdY - 8} textAnchor="end" className="marker-label">reference line {referenceLineMgPerL.toFixed(1)} mg/L</text>
+        <text x={width - padding.right} y={chart.thresholdY - 8} textAnchor="end" className="marker-label">참고선 {referenceLineMgPerL.toFixed(1)} mg/L</text>
 
         <line x1={chart.bedtimeX} x2={chart.bedtimeX} y1={padding.top} y2={height - padding.bottom} className="bedtime-line" />
-        <text x={chart.bedtimeX - 8} y={padding.top + 16} textAnchor="end" className="marker-label">bedtime</text>
+        <text x={chart.bedtimeX - 8} y={padding.top + 16} textAnchor="end" className="marker-label">취침</text>
+
+        {chart.doseMarkers.map((marker) => (
+          <g key={marker.id} role="img" aria-label={`섭취 표시 ${marker.label}`}>
+            <line x1={marker.x} x2={marker.x} y1={height - padding.bottom - 10} y2={height - padding.bottom} className="dose-marker" />
+            <circle cx={marker.x} cy={height - padding.bottom - 12} r="3.5" className="dose-marker" />
+          </g>
+        ))}
 
         {chart.paths.map((path) => (
-          <path key={`${path.id}-band`} d={path.bandD} className={`uncertainty-band ${path.tone}`} aria-label={`${path.label} uncertainty band`} />
+          <path key={`${path.id}-band`} d={path.bandD} className={`uncertainty-band ${path.tone}`} aria-label={`${path.label} 불확실 구간`} />
         ))}
 
         {chart.paths.map((path) => (
@@ -111,7 +134,7 @@ export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, onInspect 
         {inspected.map((item) => (
           <span key={item.id}>
             {item.label}: {item.concentrationMgPerL.toFixed(2)} mg/L ({item.lowMgPerL.toFixed(2)}–{item.highMgPerL.toFixed(2)})
-            {item.topContributor ? ` · most from ${item.topContributor.label}` : ''}
+            {item.topContributor ? ` · 가장 큰 기여 ${item.topContributor.label}` : ''}
           </span>
         ))}
       </div>
@@ -119,7 +142,7 @@ export function CaffeineGraph({ series, bedtime, referenceLineMgPerL, onInspect 
   );
 }
 
-export function buildChartModel(series: GraphSeries[], bedtime: Date, referenceLineMgPerL: number) {
+export function buildChartModel(series: GraphSeries[], bedtime: Date, referenceLineMgPerL: number, doses: GraphDose[] = []) {
   const allPoints = series.flatMap((item) => item.points);
   const elapsedMin = Math.min(...allPoints.map((point) => point.elapsedMinutes), 0);
   const elapsedMax = Math.max(...allPoints.map((point) => point.elapsedMinutes), 1);
@@ -141,6 +164,10 @@ export function buildChartModel(series: GraphSeries[], bedtime: Date, referenceL
     inspectX,
     thresholdY: yScale(referenceLineMgPerL),
     bedtimeX: xScale(bedtimeElapsed),
+    doseMarkers: doses.map((dose) => {
+      const elapsed = (dose.consumedAt.getTime() - startTimestamp) / 60_000;
+      return { id: dose.id, label: dose.label, x: xScale(elapsed) };
+    }).filter((marker) => marker.x >= padding.left - 4 && marker.x <= width - padding.right + 4),
     yTicks: [0, concentrationMax / 3, (concentrationMax * 2) / 3, concentrationMax].map((value) => ({ value, y: yScale(value) })),
     xTicks: [elapsedMin, elapsedMin + (elapsedMax - elapsedMin) / 3, elapsedMin + ((elapsedMax - elapsedMin) * 2) / 3, elapsedMax].map((value) => ({ value, x: xScale(value) })),
     paths: series.map((item) => ({
@@ -208,6 +235,6 @@ function inspectSeriesAt(series: GraphSeries[], index: number) {
 }
 
 function formatTimestamp(timestamp?: Date) {
-  if (!timestamp) return 'No data';
-  return timestamp.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  if (!timestamp) return '데이터 없음';
+  return timestamp.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 }

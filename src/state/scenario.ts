@@ -3,6 +3,8 @@ import { findCatalogItem } from '../catalog/vertuo';
 
 export interface SleepSettings {
   bedtime: string;
+  /** Local clock time HH:MM. The plotted bedtime is the next occurrence of this clock. */
+  bedtimeClock?: string;
   referenceLineMgPerL?: number;
   thresholdMgPerL?: number;
 }
@@ -42,9 +44,36 @@ export const DEFAULT_PROFILE: PersonProfile = {
   takesOralContraceptives: false,
 };
 
+export const DEFAULT_BEDTIME_CLOCK = '23:00';
+
+export function isClockTime(value: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+export function clockFromDate(date: Date): string {
+  if (!Number.isFinite(date.getTime())) return DEFAULT_BEDTIME_CLOCK;
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Next local occurrence of a fixed clock time. Exactly on that minute stays on today's occurrence. */
+export function nextClockTime(now: Date, clock: string): Date {
+  const safe = isClockTime(clock) ? clock : DEFAULT_BEDTIME_CLOCK;
+  const [hours, minutes] = safe.split(':').map(Number);
+  const result = new Date(now);
+  result.setHours(hours, minutes, 0, 0);
+  if (result.getTime() < now.getTime()) result.setDate(result.getDate() + 1);
+  return result;
+}
+
+export function activeBedtimeClock(sleep: SleepSettings): string {
+  if (sleep.bedtimeClock && isClockTime(sleep.bedtimeClock)) return sleep.bedtimeClock;
+  return clockFromDate(new Date(sleep.bedtime));
+}
+
 export function createDefaultSleepSettings(now = new Date()): SleepSettings {
   return {
-    bedtime: new Date(now.getTime() + 8 * 60 * 60_000).toISOString(),
+    bedtime: nextClockTime(now, DEFAULT_BEDTIME_CLOCK).toISOString(),
+    bedtimeClock: DEFAULT_BEDTIME_CLOCK,
     referenceLineMgPerL: 0.7,
   };
 }
@@ -275,7 +304,7 @@ function parseIntakes(value: unknown): CaffeineIntake[] {
 
 function parseSleep(value: unknown, now: Date): SleepSettings {
   if (!value || typeof value !== 'object') return createDefaultSleepSettings(now);
-  const sleep = value as { bedtime?: unknown; thresholdMgPerL?: unknown; referenceLineMgPerL?: unknown };
+  const sleep = value as { bedtime?: unknown; thresholdMgPerL?: unknown; referenceLineMgPerL?: unknown; bedtimeClock?: unknown };
   const bedtime = typeof sleep.bedtime === 'string' && Number.isFinite(new Date(sleep.bedtime).getTime())
     ? sleep.bedtime
     : createDefaultSleepSettings(now).bedtime;
@@ -283,7 +312,8 @@ function parseSleep(value: unknown, now: Date): SleepSettings {
   const referenceLineMgPerL = typeof rawReference === 'number' && Number.isFinite(rawReference) && rawReference >= 0.05 && rawReference <= 10
     ? rawReference
     : createDefaultSleepSettings(now).referenceLineMgPerL;
-  return { bedtime, referenceLineMgPerL };
+  const bedtimeClock = typeof sleep.bedtimeClock === 'string' && isClockTime(sleep.bedtimeClock) ? sleep.bedtimeClock : undefined;
+  return bedtimeClock ? { bedtime, bedtimeClock, referenceLineMgPerL } : { bedtime, referenceLineMgPerL };
 }
 
 function validateProfile(profile: PersonProfile) {

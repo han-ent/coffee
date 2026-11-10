@@ -25,20 +25,31 @@ const series: GraphSeries[] = [
 describe('CaffeineGraph', () => {
   it('renders comparison curves, threshold, bedtime, and live inspection details', () => {
     const onInspect = vi.fn();
-    render(<CaffeineGraph series={series} bedtime={new Date('2026-06-14T22:00:00.000Z')} referenceLineMgPerL={0.7} onInspect={onInspect} />);
+    render(
+      <CaffeineGraph
+        series={series}
+        bedtime={new Date('2026-06-14T22:00:00.000Z')}
+        referenceLineMgPerL={0.7}
+        doses={scenario.intakes.map((intake) => ({ id: intake.id, label: intake.label, consumedAt: intake.consumedAt }))}
+        onInspect={onInspect}
+      />,
+    );
 
-    const graph = screen.getByRole('img', { name: /caffeine concentration over time/i });
+    const graph = screen.getByRole('img', { name: /시간에 따른 카페인 농도/i });
     vi.spyOn(graph, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 920, height: 360, right: 920, bottom: 360, x: 0, y: 0, toJSON: () => ({}) });
     fireEvent.pointerMove(graph, { clientX: 460 });
+    fireEvent.pointerDown(graph, { clientX: 200, pointerId: 1 });
 
     expect(screen.getAllByText(/Scenario 1/)).toHaveLength(2);
     expect(screen.getAllByText(/Scenario 2/)).toHaveLength(2);
     expect(screen.getByText(/Scenario 1:/)).toBeInTheDocument();
     expect(screen.getByText(/Scenario 2:/)).toBeInTheDocument();
-    expect(screen.getAllByLabelText(/uncertainty band/i)).toHaveLength(2);
-    expect(screen.getAllByText(/most from/i)).toHaveLength(2);
-    expect(screen.getByText(/reference line 0.7 mg\/L/i)).toBeInTheDocument();
-    expect(screen.getByText(/bedtime/i)).toBeInTheDocument();
+    expect(screen.getAllByLabelText(/불확실 구간/i)).toHaveLength(2);
+    expect(screen.getAllByText(/가장 큰 기여/i)).toHaveLength(2);
+    expect(screen.getByText(/참고선 0.7 mg\/L/i)).toBeInTheDocument();
+    expect(screen.getByText('취침')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '섭취 표시 Morning mug' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '섭취 표시 Afternoon espresso' })).toBeInTheDocument();
     expect(onInspect).toHaveBeenCalled();
   });
 
