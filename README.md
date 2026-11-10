@@ -1,16 +1,39 @@
 # Caffeine PK Explorer
 
-Static Vite + React + TypeScript app for comparing coffee timing scenarios with transparent caffeine pharmacokinetic estimates.
+## Demo
 
-Current implementation includes:
+[Live demo](https://ys-laube.github.io/pj_coffee/)
 
-- Pure caffeine PK engine with first-order absorption/elimination, profile modifiers, uncertainty bands, and non-medical disclaimer copy.
-- Explicit Scenario 1 / Scenario 2 comparison graph backed by versioned v2 app state.
-- Curated capsule catalog with company → system → product selection, dose-group/source-confidence badges, scenario-targeted manual caffeine entry, and per-drink override.
-- Balanced local profile state, local persistence, sanitized URL share links, malformed-link recovery, and privacy exclusions for sensitive profile flags. Legacy v1 localStorage/share payloads migrate into Scenario 1 plus a Scenario 2 comparison copy.
-- GitHub Pages deployment workflow and baseline quality gates.
+## What it is
+
+Static app for comparing coffee timing scenarios with transparent caffeine pharmacokinetic estimates. Scenario 1 and Scenario 2 share a versioned v2 state model, a curated capsule catalog (company, system, product, dose-group and source-confidence badges), scenario-targeted manual caffeine entry, per-drink overrides, local persistence, and sanitized URL share links. Legacy v1 localStorage and share payloads migrate into Scenario 1 plus a Scenario 2 comparison copy. Sensitive profile flags stay out of share links.
 
 This is an educational planning tool, not medical advice. Capsule caffeine values vary by market, batch, recipe, and source; use manual overrides when your sleeve or product page provides a better value. The graph reference line is a user planning marker, not a universal sleep cutoff.
+
+The PK engine uses first-order absorption and elimination, profile modifiers, and uncertainty bands. Simulation output includes this disclaimer: "This caffeine curve is an educational planning estimate, not medical advice, diagnosis, or treatment. Individual metabolism can vary widely; use manual overrides and consult a clinician for health-specific questions."
+
+## Stack
+
+- Vite, React, and TypeScript
+- Vitest and Testing Library
+- ESLint
+- GitHub Pages (static `dist` upload)
+
+## Run locally
+
+```bash
+npm install
+npm run dev
+```
+
+- `npm run dev` — local Vite dev server
+- `npm run lint` — ESLint checks
+- `npm run test` — Vitest tests
+- `npm run typecheck` — TypeScript type check without emitting
+- `npm run build` — TypeScript build plus Vite static artifact
+- `npm run preview` — preview the production build
+
+GitHub Pages runs the same lint, test, and build steps with `npm ci` on Node 20. The Vite `base` path defaults to the repository name when `GITHUB_REPOSITORY` is set by Actions. Override with `BASE_PATH` when needed.
 
 ## Coffee seed sources
 
@@ -29,15 +52,3 @@ Useful references used during planning:
 - Keurig caffeine-content support article: https://support.keurig.com/?kmContentId=1014715&page=shell&shell=knowledge-article
 - Starbucks at Home K-Cup product listing: https://athome.starbucks.com/product-category/k-cup-pods
 - NESCAFÉ Dolce Gusto capsule listing: https://www.dolcegusto-me.com/ndg_mena_en/coffee-drinks
-
-## Scripts
-
-- `npm run dev` — local Vite dev server
-- `npm run lint` — ESLint checks
-- `npm run test` — Vitest tests
-- `npm run typecheck` — TypeScript type check without emitting
-- `npm run build` — TypeScript build plus Vite static artifact
-
-## GitHub Pages
-
-The Vite `base` path defaults to the repository name when `GITHUB_REPOSITORY` is set by Actions. Override with `BASE_PATH` when needed.
