@@ -17,6 +17,7 @@ describe('local scenario persistence', () => {
     state.profile.smokingStatus = 'smoker';
     state.profile.takesOralContraceptives = true;
     state.sleep.referenceLineMgPerL = 0.6;
+    state.sleep.referenceLineManual = true;
 
     expect(saveScenarioState(state, storage).ok).toBe(true);
     const loaded = loadScenarioState(storage);
@@ -28,6 +29,28 @@ describe('local scenario persistence', () => {
     expect(loaded.state.scenarios[0].name).toBe('Scenario 1');
     expect(loaded.state.scenarios[1].intakes[0].caffeineMg).toBe(100);
     expect(loaded.state.sleep.referenceLineMgPerL).toBe(0.6);
+    expect(loaded.state.sleep.bedtimeClock).toBe('23:00');
+  });
+
+  it('migrates the old pregnancy toggle and keeps a custom reference line', () => {
+    const storage = memoryStorage();
+    const legacy = {
+      schemaVersion: 2,
+      profile: { weightKg: 70, pregnancyStatus: 'pregnant-or-postpartum', sensitivity: 'high' },
+      scenarios: [
+        { id: 'scenario-1', name: 'Scenario 1', intakes: [] },
+        { id: 'scenario-2', name: 'Scenario 2', intakes: [] },
+      ],
+      sleep: { bedtime: '2026-06-14T23:00:00.000Z', referenceLineMgPerL: 0.8 },
+    };
+    storage.setItem('caffeine-pk/scenario/v2', JSON.stringify(legacy));
+
+    const loaded = loadScenarioState(storage);
+
+    expect(loaded.ok).toBe(true);
+    expect(loaded.state.profile.pregnancyStatus).toBe('second-trimester');
+    expect(loaded.state.sleep.referenceLineMgPerL).toBe(0.8);
+    expect(loaded.state.sleep.referenceLineManual).toBe(true);
   });
 
   it('preserves catalog provenance for stored catalog intakes', () => {

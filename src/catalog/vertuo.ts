@@ -77,12 +77,24 @@ export function getCatalogSystems(brand: string) {
   return unique(CURATED_COFFEE_CATALOG.filter((item) => item.brand === brand).map((item) => item.system));
 }
 
+const DOSE_GROUP_KO: Record<DoseGroup, string> = {
+  decaf: '디카페인',
+  low: '저용량',
+  standard: '보통',
+  high: '고용량',
+  'half-caf': '하프카페인',
+};
+
+export function doseGroupKorean(group: DoseGroup) {
+  return DOSE_GROUP_KO[group];
+}
+
 export function getCatalogProducts(brand: string, system: string, search = '') {
   const query = search.trim().toLowerCase();
   return CURATED_COFFEE_CATALOG.filter((item) => {
     if (item.brand !== brand || item.system !== system) return false;
     if (!query) return true;
-    return `${item.name} ${item.sizeLabel} ${item.doseGroup} ${item.confidence}`.toLowerCase().includes(query);
+    return `${item.name} ${item.sizeLabel} ${item.doseGroup} ${DOSE_GROUP_KO[item.doseGroup]} ${item.confidence}`.toLowerCase().includes(query);
   });
 }
 

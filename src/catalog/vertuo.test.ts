@@ -27,5 +27,6 @@ describe('curated capsule catalog', () => {
     expect(nespressoDecafs.every((item) => item.brand === 'Nespresso' && item.system === 'Vertuo')).toBe(true);
     expect(starbucksKcups).toHaveLength(1);
     expect(starbucksKcups[0].name).toMatch(/Pike Place/);
+    expect(getCatalogProducts('Nespresso', 'Vertuo', '디카페인').map((item) => item.id)).toContain('nespresso-vertuo-melozio-decaffeinato');
   });
 });

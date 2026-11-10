@@ -1,0 +1,4 @@
+This font subset is Noto Serif KR, licensed under the SIL Open Font License, Version 1.1.
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
+Copyright 2017-2023 Google LLC (https://opensource.google/).
+The full license text is at https://scripts.sil.org/OFL

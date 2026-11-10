@@ -1,9 +1,13 @@
-import { coffeeProductToIntake, makeManualCoffeeIntake, type CaffeineIntake, type PersonProfile, type Scenario } from '../domain';
+import { coffeeProductToIntake, makeManualCoffeeIntake, type CaffeineIntake, type CaffeineSensitivity, type PersonProfile, type PregnancyStatus, type Scenario } from '../domain';
 import { findCatalogItem } from '../catalog/vertuo';
 
 export interface SleepSettings {
   bedtime: string;
+  /** Local clock time HH:MM. The plotted bedtime is the next occurrence of this clock. */
+  bedtimeClock?: string;
   referenceLineMgPerL?: number;
+  /** When true, a typed reference line is kept instead of following sensitivity. */
+  referenceLineManual?: boolean;
   thresholdMgPerL?: number;
 }
 
@@ -42,11 +46,50 @@ export const DEFAULT_PROFILE: PersonProfile = {
   takesOralContraceptives: false,
 };
 
+export const DEFAULT_BEDTIME_CLOCK = '23:00';
+
+export function isClockTime(value: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+export function clockFromDate(date: Date): string {
+  if (!Number.isFinite(date.getTime())) return DEFAULT_BEDTIME_CLOCK;
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Next local occurrence of a fixed clock time. Exactly on that minute stays on today's occurrence. */
+export function nextClockTime(now: Date, clock: string): Date {
+  const safe = isClockTime(clock) ? clock : DEFAULT_BEDTIME_CLOCK;
+  const [hours, minutes] = safe.split(':').map(Number);
+  const result = new Date(now);
+  result.setHours(hours, minutes, 0, 0);
+  if (result.getTime() < now.getTime()) result.setDate(result.getDate() + 1);
+  return result;
+}
+
+export function activeBedtimeClock(sleep: SleepSettings): string {
+  if (sleep.bedtimeClock && isClockTime(sleep.bedtimeClock)) return sleep.bedtimeClock;
+  return clockFromDate(new Date(sleep.bedtime));
+}
+
 export function createDefaultSleepSettings(now = new Date()): SleepSettings {
   return {
-    bedtime: new Date(now.getTime() + 8 * 60 * 60_000).toISOString(),
+    bedtime: nextClockTime(now, DEFAULT_BEDTIME_CLOCK).toISOString(),
+    bedtimeClock: DEFAULT_BEDTIME_CLOCK,
     referenceLineMgPerL: 0.7,
+    referenceLineManual: false,
   };
+}
+
+export function referenceForSensitivity(sensitivity: CaffeineSensitivity | undefined): number {
+  if (sensitivity === 'high') return 0.5;
+  if (sensitivity === 'low') return 1;
+  return 0.7;
+}
+
+export function migratePregnancyStatus(status: PregnancyStatus | undefined): PregnancyStatus | undefined {
+  if (status === 'pregnant-or-postpartum') return 'second-trimester';
+  return status;
 }
 
 export function createDefaultScenarioState(now = new Date()): AppScenarioState {
@@ -218,9 +261,9 @@ function migrateV1State(value: LegacyAppScenarioState, now: Date): AppScenarioSt
 
   return {
     schemaVersion: APP_SCHEMA_VERSION,
-    profile: { ...DEFAULT_PROFILE, ...value.profile },
+    profile: normalizeStoredProfile({ ...DEFAULT_PROFILE, ...value.profile }),
     scenarios: [scenarioOne, scenarioTwo],
-    sleep: parseSleep(value.sleep, now),
+    sleep: finalizeSleep(parseSleep(value.sleep, now), value.profile?.sensitivity),
     updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : now.toISOString(),
   };
 }
@@ -232,9 +275,9 @@ function normalizeV2State(record: Record<string, unknown>, now: Date): AppScenar
 
   return {
     schemaVersion: APP_SCHEMA_VERSION,
-    profile: { ...DEFAULT_PROFILE, ...profile },
+    profile: normalizeStoredProfile({ ...DEFAULT_PROFILE, ...profile }),
     scenarios: record.scenarios.slice(0, SCENARIO_COMPARISON_COUNT).map((scenario, index) => parseScenario(scenario, index)) as [ScenarioState, ScenarioState],
-    sleep: parseSleep(record.sleep, now),
+    sleep: finalizeSleep(parseSleep(record.sleep, now), profile.sensitivity),
     updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : now.toISOString(),
   };
 }
@@ -275,7 +318,7 @@ function parseIntakes(value: unknown): CaffeineIntake[] {
 
 function parseSleep(value: unknown, now: Date): SleepSettings {
   if (!value || typeof value !== 'object') return createDefaultSleepSettings(now);
-  const sleep = value as { bedtime?: unknown; thresholdMgPerL?: unknown; referenceLineMgPerL?: unknown };
+  const sleep = value as { bedtime?: unknown; thresholdMgPerL?: unknown; referenceLineMgPerL?: unknown; bedtimeClock?: unknown; referenceLineManual?: unknown };
   const bedtime = typeof sleep.bedtime === 'string' && Number.isFinite(new Date(sleep.bedtime).getTime())
     ? sleep.bedtime
     : createDefaultSleepSettings(now).bedtime;
@@ -283,7 +326,26 @@ function parseSleep(value: unknown, now: Date): SleepSettings {
   const referenceLineMgPerL = typeof rawReference === 'number' && Number.isFinite(rawReference) && rawReference >= 0.05 && rawReference <= 10
     ? rawReference
     : createDefaultSleepSettings(now).referenceLineMgPerL;
-  return { bedtime, referenceLineMgPerL };
+  const bedtimeClock = typeof sleep.bedtimeClock === 'string' && isClockTime(sleep.bedtimeClock) ? sleep.bedtimeClock : undefined;
+  const referenceLineManual = typeof sleep.referenceLineManual === 'boolean' ? sleep.referenceLineManual : undefined;
+  return {
+    bedtime,
+    referenceLineMgPerL,
+    ...(bedtimeClock ? { bedtimeClock } : {}),
+    ...(referenceLineManual !== undefined ? { referenceLineManual } : {}),
+  };
+}
+
+function normalizeStoredProfile(profile: PersonProfile): PersonProfile {
+  return { ...profile, pregnancyStatus: migratePregnancyStatus(profile.pregnancyStatus) };
+}
+
+function finalizeSleep(sleep: SleepSettings, sensitivity: CaffeineSensitivity | undefined): SleepSettings {
+  const suggested = referenceForSensitivity(sensitivity);
+  const stored = sleep.referenceLineMgPerL;
+  const manual = sleep.referenceLineManual ?? (stored !== undefined && stored !== 0.7 && stored !== suggested);
+  if (manual) return { ...sleep, referenceLineManual: true };
+  return { ...sleep, referenceLineManual: false, referenceLineMgPerL: suggested };
 }
 
 function validateProfile(profile: PersonProfile) {

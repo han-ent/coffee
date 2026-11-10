@@ -1,25 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CaffeineGraph, type GraphSeries } from './components/CaffeineGraph';
 import {
   CURATED_COFFEE_CATALOG,
-  doseGroupLabel,
+  doseGroupKorean,
   findCatalogItem,
   getCatalogBrands,
   getCatalogProducts,
   getCatalogSystems,
 } from './catalog/vertuo';
-import { concentrationAt, simulateScenario } from './domain';
+import { CaffeineGraph, type GraphSeries } from './components/CaffeineGraph';
+import { NON_MEDICAL_DISCLAIMER, concentrationAt, simulateScenario } from './domain';
 import {
-  SHARE_LABEL_PRIVACY_WARNING,
+  DRINK_PRESETS,
+  bedtimeVerdict,
+  firstDropBelow,
+  formatConcentration,
+  formatKoreanWhen,
+} from './planner';
+import {
+  activeBedtimeClock,
+  referenceForSensitivity,
   addCatalogIntake,
   addManualIntake,
-  clearScenario,
-  copyScenario,
-  createDefaultScenarioState,
-  createShareUrl,
-  getScenarioState,
+  isClockTime,
   loadScenarioState,
-  loadShareFromUrl,
+  nextClockTime,
   removeIntake,
   saveScenarioState,
   toScenario,
@@ -30,13 +34,60 @@ import {
 import './styles/tokens.css';
 import './styles/global.css';
 
+function DrinkMark({ id }: { id: string }) {
+  const shared = {
+    viewBox: '0 0 24 24',
+    width: 18,
+    height: 18,
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.4,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+    className: 'chip-mark',
+  };
+  if (id === 'espresso') {
+    return <svg {...shared}><path d="M9 9h5.2v5.2a2.6 2.6 0 0 1-5.2 0V9z" /><path d="M14.2 10.4h1.6a1.4 1.4 0 0 1 0 2.8h-1.6" /><path d="M7.5 18.5h8" /></svg>;
+  }
+  if (id === 'cold-brew') {
+    return <svg {...shared}><path d="M8.5 6.5h7v12.2a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2V6.5z" /><path d="M8.5 10.5h7" /></svg>;
+  }
+  if (id === 'latte') {
+    return <svg {...shared}><path d="M7.5 8h7.2v8.2a3.2 3.2 0 0 1-6.4 0V8z" /><path d="M14.7 10h1.8a1.6 1.6 0 0 1 0 3.2h-1.8" /><path d="M8.4 11.2h5.2" /></svg>;
+  }
+  if (id === 'energy') {
+    return <svg {...shared}><path d="M9 4.5h6l-.6 15H9.6L9 4.5z" /><path d="M9.4 9h5.2" /></svg>;
+  }
+  if (id === 'green-tea') {
+    return <svg {...shared}><path d="M5 15.5c3.2-6 7.2-8 14-8-1.2 6.4-5.2 10-10.4 10C6.6 17.5 5.4 16.6 5 15.5z" /><path d="M12 13.2c.4-2.2 1.6-3.8 3.4-4.8" /></svg>;
+  }
+  if (id === 'custom') {
+    return <svg {...shared}><circle cx="12" cy="12" r="7" /><path d="M12 8.5v7M8.5 12h7" /></svg>;
+  }
+  const tall = id === 'americano-grande';
+  return <svg {...shared}><path d={tall ? 'M7 6.5h8v10.2a3.4 3.4 0 0 1-6.8 0V6.5z' : 'M8 8h7v8.4a3 3 0 0 1-6 0V8z'} /><path d={tall ? 'M15 8.4h2.1a1.8 1.8 0 0 1 0 3.6H15' : 'M15 10h1.8a1.5 1.5 0 0 1 0 3H15'} /></svg>;
+}
+
+function pregnancySelectValue(status: AppScenarioState['profile']['pregnancyStatus']) {
+  if (
+    status === 'first-trimester'
+    || status === 'second-trimester'
+    || status === 'third-trimester'
+    || status === 'postpartum-12-weeks'
+    || status === 'not-pregnant'
+  ) return status;
+  return status === 'pregnant-or-postpartum' ? 'second-trimester' : 'not-pregnant';
+}
+
 function toLocalInputValue(date: Date) {
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return offsetDate.toISOString().slice(0, 16);
 }
 
 function fromLocalInputValue(value: string) {
-  return value ? new Date(value) : new Date();
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : new Date();
 }
 
 function parsePositiveNumber(value: string) {
@@ -44,41 +95,26 @@ function parsePositiveNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-const weightSuggestionsKg = [45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 100, 110, 120];
-
-function formatDuration(minutes: number) {
-  if (!Number.isFinite(minutes) || minutes < 0) return 'No caffeine yet';
-  const hours = Math.floor(minutes / 60);
-  const mins = Math.round(minutes % 60);
-  return `${hours}h ${mins}m`;
-}
-
 export function App() {
-  const initialLoad = useMemo(() => {
-    const shared = loadShareFromUrl();
-    if (shared.ok) return { state: shared.state, notice: shared.warning ?? 'Shared scenario loaded.' };
-    const stored = loadScenarioState();
-    return { state: stored.state, notice: stored.ok ? '' : `Local data reset: ${stored.error}` };
-  }, []);
-
-  const [state, setState] = useState<AppScenarioState>(initialLoad.state);
-  const [selectedScenarioIndex, setSelectedScenarioIndex] = useState<0 | 1>(0);
-  const [notice, setNotice] = useState(initialLoad.notice);
+  const initialState = useMemo(() => loadScenarioState().state, []);
+  const [state, setState] = useState<AppScenarioState>(initialState);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [capsulesOpen, setCapsulesOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customMg, setCustomMg] = useState('');
+  const [consumedAt, setConsumedAt] = useState(() => new Date());
+  const [lastPresetId, setLastPresetId] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
+  const [weightDraft, setWeightDraft] = useState(String(initialState.profile.weightKg));
   const [catalogBrand, setCatalogBrand] = useState(CURATED_COFFEE_CATALOG[0].brand);
   const [catalogSystem, setCatalogSystem] = useState(CURATED_COFFEE_CATALOG[0].system);
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogId, setCatalogId] = useState(CURATED_COFFEE_CATALOG[0].id);
-  const [targetScenarioId, setTargetScenarioId] = useState('scenario-1');
-  const [caffeineOverrideMg, setCaffeineOverrideMg] = useState('');
-  const [manualLabel, setManualLabel] = useState('My coffee');
-  const [manualMg, setManualMg] = useState('120');
-  const [consumedAt, setConsumedAt] = useState(toLocalInputValue(new Date()));
-  const [shareUrl, setShareUrl] = useState('');
-  const [weightDraft, setWeightDraft] = useState(String(initialLoad.state.profile.weightKg));
 
   useEffect(() => {
     const saved = saveScenarioState(state);
-    if (!saved.ok) setNotice(`Local save unavailable: ${saved.error}`);
+    if (!saved.ok) setNotice('이 브라우저에 저장하지 못했습니다. 기록은 이 화면에만 남아 있습니다.');
   }, [state]);
 
   useEffect(() => {
@@ -94,349 +130,386 @@ export function App() {
 
   useEffect(() => {
     const systems = getCatalogSystems(catalogBrand);
-    const nextSystem = systems[0];
-    if (nextSystem && !systems.includes(catalogSystem)) setCatalogSystem(nextSystem);
+    if (systems[0] && !systems.includes(catalogSystem)) setCatalogSystem(systems[0]);
   }, [catalogBrand, catalogSystem]);
 
   useEffect(() => {
     if (filteredCatalog.some((coffee) => coffee.id === catalogId)) return;
-    const fallback = filteredCatalog[0] ?? getCatalogProducts(catalogBrand, catalogSystem)[0] ?? CURATED_COFFEE_CATALOG[0];
+    const fallback = filteredCatalog[0] ?? CURATED_COFFEE_CATALOG[0];
     setCatalogId(fallback.id);
   }, [catalogBrand, catalogId, catalogSystem, filteredCatalog]);
 
-  const targetScenarioName = getScenarioState(state, targetScenarioId).name;
-  const selectedCoffee = findCatalogItem(catalogId);
-  const scenarioModels = useMemo(() => state.scenarios.map((scenario) => toScenario(state, scenario.id)), [state]);
-  const allIntakeDates = useMemo(
-    () => state.scenarios.flatMap((scenario) => scenario.intakes.map((intake) => new Date(intake.consumedAt).getTime())),
-    [state.scenarios],
+  const minuteNow = Math.floor(Date.now() / 60_000) * 60_000;
+  const now = useMemo(() => new Date(minuteNow), [minuteNow]);
+  const clock = activeBedtimeClock(state.sleep);
+  const bedtime = useMemo(() => nextClockTime(now, clock), [now, clock]);
+  const reference = state.sleep.referenceLineMgPerL ?? 0.7;
+  const log = state.scenarios[0];
+  const scenario = useMemo(() => toScenario(state, log.id), [state, log.id]);
+  const window = useMemo(() => {
+    const doseTimes = scenario.intakes.map((intake) => intake.consumedAt.getTime());
+    const startMs = Math.min(now.getTime(), ...(doseTimes.length ? doseTimes : [now.getTime()]));
+    let endMs = startMs + 24 * 60 * 60_000;
+    if (bedtime.getTime() + 6 * 60 * 60_000 > endMs) endMs = bedtime.getTime() + 6 * 60 * 60_000;
+    const lastDose = doseTimes.length ? Math.max(...doseTimes) : startMs;
+    if (lastDose + 18 * 60 * 60_000 > endMs) endMs = lastDose + 18 * 60 * 60_000;
+    return { startAt: new Date(startMs), endAt: new Date(endMs) };
+  }, [scenario.intakes, now, bedtime]);
+  const simulation = useMemo(
+    () => simulateScenario(scenario, { startAt: window.startAt, endAt: window.endAt, stepMinutes: 1 }),
+    [scenario, window.startAt, window.endAt],
   );
-  const startAt = useMemo(() => allIntakeDates.length ? new Date(Math.min(...allIntakeDates)) : new Date(), [allIntakeDates]);
-  const endAt = useMemo(() => new Date(startAt.getTime() + 36 * 60 * 60_000), [startAt]);
-  const referenceLine = state.sleep.referenceLineMgPerL ?? 0.7;
-  const simulations = useMemo(
-    () => scenarioModels.map((scenario) => simulateScenario(scenario, { startAt, endAt, stepMinutes: 1 })),
-    [scenarioModels, startAt, endAt],
-  );
-  const graphSeries: GraphSeries[] = useMemo(() => simulations.map((simulation, index) => ({
-    id: state.scenarios[index]?.id ?? `scenario-${index + 1}`,
-    label: state.scenarios[index]?.name ?? `Scenario ${index + 1}`,
+  const hasDoses = scenario.intakes.length > 0;
+  const currentMg = hasDoses ? concentrationAt(state.profile, scenario.intakes, now).concentrationMgPerL : null;
+  const bedtimeMg = hasDoses ? concentrationAt(state.profile, scenario.intakes, bedtime).concentrationMgPerL : null;
+  const verdict = bedtimeMg === null ? null : bedtimeVerdict(bedtimeMg, reference);
+  const drop = currentMg === null ? null : firstDropBelow(simulation.points, now, reference);
+  const graphSeries: GraphSeries[] = [{
+    id: log.id,
+    label: '오늘',
     points: simulation.points,
-    tone: index === 0 ? 'gold' : 'blue',
-  })), [simulations, state.scenarios]);
-  const bedtime = new Date(state.sleep.bedtime);
-  const bedtimeResiduals = scenarioModels.map((scenario) => concentrationAt(state.profile, scenario.intakes, bedtime));
-  const latestIntakeTime = allIntakeDates.length ? Math.max(...allIntakeDates) : Number.NaN;
-  const minutesSinceLastCaffeineAtBedtime = Number.isFinite(latestIntakeTime) ? (bedtime.getTime() - latestIntakeTime) / 60_000 : Number.NaN;
+    tone: 'gold',
+  }];
+  const doses = scenario.intakes.map((intake) => ({
+    id: intake.id,
+    label: intake.label,
+    consumedAt: intake.consumedAt,
+  }));
+  const listed = [...log.intakes].sort((a, b) => new Date(b.consumedAt).getTime() - new Date(a.consumedAt).getTime());
+  const nearNow = Math.abs(consumedAt.getTime() - Date.now()) < 60_000;
+  const selectedCoffee = findCatalogItem(catalogId);
 
   function commitWeight() {
     if (weightDraft.trim() === '') {
-      setNotice('Enter a weight between 25 and 250 kg. Last saved profile was preserved.');
+      setNotice('체중을 25–250 kg로 입력해 주세요. 마지막 저장 값을 유지했습니다.');
       setWeightDraft(String(state.profile.weightKg));
       return;
     }
     const weightKg = Number(weightDraft);
     if (!Number.isFinite(weightKg) || weightKg < 25 || weightKg > 250) {
-      setNotice('Weight must stay between 25 and 250 kg. Last saved profile was preserved.');
+      setNotice('체중은 25–250 kg 사이여야 합니다. 마지막 저장 값을 유지했습니다.');
       setWeightDraft(String(state.profile.weightKg));
       return;
     }
+    setNotice('');
     setState((current) => updateProfile(current, { weightKg }));
   }
 
-  function updateSelectedScenario(updater: (current: AppScenarioState) => AppScenarioState) {
-    setState((current) => updater(current));
+  function setBedtimeClock(value: string) {
+    if (!isClockTime(value)) return;
+    setState((current) => updateSleepSettings(current, {
+      bedtimeClock: value,
+      bedtime: nextClockTime(new Date(), value).toISOString(),
+    }));
   }
 
-  function handleAddCatalog() {
-    const override = parsePositiveNumber(caffeineOverrideMg);
-    setState((current) => addCatalogIntake(current, targetScenarioId, catalogId, fromLocalInputValue(consumedAt), override));
-    setNotice(`${selectedCoffee?.name ?? 'Coffee'} added to ${targetScenarioName}. Manual caffeine overrides remain local-first.`);
+  function addPreset(presetId: string, label: string, caffeineMg: number) {
+    setState((current) => addManualIntake(current, log.id, label, caffeineMg, consumedAt));
+    setLastPresetId(presetId);
+    setNotice('');
   }
 
-  function handleAddManual() {
-    const caffeineMg = parsePositiveNumber(manualMg);
+  function addCustom() {
+    const caffeineMg = parsePositiveNumber(customMg);
     if (!caffeineMg) {
-      setNotice('Enter a positive caffeine amount before adding manual coffee.');
+      setNotice('직접 입력하려면 카페인 mg를 적어 주세요.');
       return;
     }
-    setState((current) => addManualIntake(current, targetScenarioId, manualLabel, caffeineMg, fromLocalInputValue(consumedAt)));
-    setNotice(`Manual caffeine entry added to ${targetScenarioName}.`);
+    setState((current) => addManualIntake(current, log.id, customName.trim() || '직접 입력', caffeineMg, consumedAt));
+    setCustomMg('');
+    setCustomName('');
+    setLastPresetId('custom');
+    setNotice('');
   }
 
-  function handleShare() {
-    let nextShareUrl: string;
-    try {
-      nextShareUrl = createShareUrl(state);
-    } catch (error) {
-      setNotice(error instanceof Error ? `Share link could not be created: ${error.message}` : 'Share link could not be created.');
-      return;
-    }
-    setShareUrl(nextShareUrl);
-
-    if (!navigator.clipboard) {
-      setNotice('Share link created. Copy it manually below; sensitive local-only flags were excluded.');
-      return;
-    }
-
-    void navigator.clipboard
-      .writeText(nextShareUrl)
-      .then(() => setNotice('Share link copied. Sensitive local-only flags were excluded.'))
-      .catch(() => setNotice('Share link created, but clipboard copy was blocked. Copy it manually below.'));
+  function addCapsule() {
+    if (!selectedCoffee) return;
+    setState((current) => addCatalogIntake(current, log.id, catalogId, consumedAt));
+    setLastPresetId(null);
+    setNotice('');
   }
 
-  function handleReset() {
-    updateSelectedScenario(() => createDefaultScenarioState());
-    setShareUrl('');
-    setNotice('Scenarios reset locally.');
+  function shiftTime(minutes: number) {
+    setConsumedAt((current) => new Date(current.getTime() + minutes * 60_000));
   }
+
+  const dropText = !hasDoses
+    ? '기록 없음'
+    : drop === 'below'
+      ? '이미 참고선 아래'
+      : drop === 'above-through-window'
+        ? '이 구간 안에도 참고선 위'
+        : formatKoreanWhen(drop ?? now, now);
 
   return (
-    <main className="app-shell">
-      <section className="hero-card" aria-labelledby="app-title">
-        <p className="eyebrow">Caffeine PK planner</p>
-        <h1 id="app-title">Compare coffee timing with transparent scenarios.</h1>
-        <p className="hero-copy">
-          Build Scenario 1 and Scenario 2 explicitly, override caffeine manually, or enter any coffee. Profile details stay
-          local by default; share links include only calculation essentials and sanitized labels.
-        </p>
-        <div className="hero-actions" aria-label="Foundation status">
-          <span className="status-pill">Static web app</span>
-          <span className="status-pill">Local-first</span>
-          <span className="status-pill">Non-medical estimates</span>
+    <main className="app">
+      <header className="topbar">
+        <div>
+          <h1>카페인 타이머</h1>
+          <p className="lede">지금 마신 것을 누르면 바로 기록됩니다. 체중과 민감도는 설정에 한 번만 둡니다.</p>
         </div>
-      </section>
+        <button
+          type="button"
+          className="settings-toggle"
+          aria-expanded={settingsOpen}
+          aria-controls="settings-panel"
+          onClick={() => setSettingsOpen((open) => !open)}
+        >
+          설정
+        </button>
+      </header>
 
-      {notice ? <div className="notice" role="status">{notice}</div> : null}
-
-      <section className="workspace-grid" aria-label="Caffeine planner controls">
-        <form className="foundation-card control-panel" onSubmit={(event) => event.preventDefault()}>
-          <h2>Balanced profile</h2>
-          <fieldset className="scenario-picker" aria-label="Scenario to edit">
-            <legend>Scenario to edit</legend>
-            <label className="radio-line">
+      {settingsOpen ? (
+        <section className="panel" id="settings-panel" aria-label="설정">
+          <h2>설정</h2>
+          <p className="hint">이 기기에만 저장됩니다. 기본값으로 바로 쓸 수 있습니다.</p>
+          <div className="settings-row">
+            <label htmlFor="weight-kg">체중</label>
+            <span>
               <input
-                type="radio"
-                name="selected-scenario"
-                checked={selectedScenarioIndex === 0}
-                onChange={() => {
-                  setSelectedScenarioIndex(0);
-                  setTargetScenarioId('scenario-1');
+                id="weight-kg"
+                inputMode="decimal"
+                value={weightDraft}
+                onChange={(event) => setWeightDraft(event.target.value)}
+                onBlur={commitWeight}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitWeight();
                 }}
               />
-              Scenario 1
-            </label>
-            <label className="radio-line">
-              <input
-                type="radio"
-                name="selected-scenario"
-                checked={selectedScenarioIndex === 1}
-                onChange={() => {
-                  setSelectedScenarioIndex(1);
-                  setTargetScenarioId('scenario-2');
-                }}
-              />
-              Scenario 2
-            </label>
-          </fieldset>
-          <label>
-            Weight (kg)
-            <input
-              type="text"
-              inputMode="decimal"
-              list="weight-suggestions-kg"
-              value={weightDraft}
-              onChange={(event) => setWeightDraft(event.target.value)}
-              onBlur={commitWeight}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') commitWeight();
-              }}
-            />
-            <datalist id="weight-suggestions-kg">
-              {weightSuggestionsKg.map((weight) => <option key={weight} value={weight} />)}
-            </datalist>
-          </label>
-          <p className="fine-print">Pick a suggested weight or type your own, then leave the field to commit 25–250 kg.</p>
-          <label>
-            Sensitivity
+              {' '}kg
+            </span>
+          </div>
+          <label className="settings-row">
+            민감도
             <select
+              aria-label="민감도"
               value={state.profile.sensitivity ?? 'typical'}
-              onChange={(event) => setState((current) => updateProfile(current, { sensitivity: event.target.value as AppScenarioState['profile']['sensitivity'] }))}
+              onChange={(event) => {
+                const sensitivity = event.target.value as AppScenarioState['profile']['sensitivity'];
+                setState((current) => {
+                  const next = updateProfile(current, { sensitivity });
+                  if (current.sleep.referenceLineManual) return next;
+                  return updateSleepSettings(next, {
+                    referenceLineMgPerL: referenceForSensitivity(sensitivity),
+                    referenceLineManual: false,
+                  });
+                });
+              }}
             >
-              <option value="low">Low</option>
-              <option value="typical">Typical</option>
-              <option value="high">High</option>
+              <option value="low">낮음</option>
+              <option value="typical">보통</option>
+              <option value="high">높음</option>
             </select>
           </label>
-          <label>
-            Smoking flag (local only)
+          <label className="settings-row">
+            흡연
             <select
+              aria-label="흡연"
               value={state.profile.smokingStatus ?? 'non-smoker'}
               onChange={(event) => setState((current) => updateProfile(current, { smokingStatus: event.target.value as AppScenarioState['profile']['smokingStatus'] }))}
             >
-              <option value="non-smoker">Non-smoker</option>
-              <option value="smoker">Smoker</option>
+              <option value="non-smoker">아니오</option>
+              <option value="smoker">예</option>
             </select>
           </label>
-          <label className="checkbox-line">
-            <input
-              type="checkbox"
-              checked={Boolean(state.profile.takesOralContraceptives)}
-              onChange={(event) => setState((current) => updateProfile(current, { takesOralContraceptives: event.target.checked }))}
-            />
-            Oral contraceptive flag (local only)
-          </label>
-          <label>
-            Pregnancy/postpartum flag (local only)
+          <label className="settings-row">
+            임신·산후
             <select
-              value={state.profile.pregnancyStatus ?? 'not-pregnant'}
+              aria-label="임신·산후"
+              value={pregnancySelectValue(state.profile.pregnancyStatus)}
               onChange={(event) => setState((current) => updateProfile(current, { pregnancyStatus: event.target.value as AppScenarioState['profile']['pregnancyStatus'] }))}
             >
-              <option value="not-pregnant">Not pregnant</option>
-              <option value="pregnant-or-postpartum">Pregnant/postpartum</option>
-              <option value="unspecified">Prefer not to say</option>
+              <option value="not-pregnant">없음</option>
+              <option value="first-trimester">임신 1분기</option>
+              <option value="second-trimester">임신 2분기</option>
+              <option value="third-trimester">임신 3분기</option>
+              <option value="postpartum-12-weeks">출산 후 12주 이내</option>
             </select>
           </label>
-        </form>
-
-        <form className="foundation-card control-panel" onSubmit={(event) => event.preventDefault()}>
-          <h2>Add coffee to {targetScenarioName}</h2>
-          <label>
-            Add to scenario
-            <select value={targetScenarioId} onChange={(event) => setTargetScenarioId(event.target.value)}>
-              {state.scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
-            </select>
+          <label className="settings-row">
+            경구피임약
+            <span className="settings-check">
+              <input
+                type="checkbox"
+                checked={Boolean(state.profile.takesOralContraceptives)}
+                onChange={(event) => setState((current) => updateProfile(current, { takesOralContraceptives: event.target.checked }))}
+              />
+              {state.profile.takesOralContraceptives ? '예' : '아니오'}
+            </span>
           </label>
-          <label>
-            Time consumed
-            <input type="datetime-local" value={consumedAt} onChange={(event) => setConsumedAt(event.target.value)} />
-          </label>
-          <label>
-            Company
-            <select value={catalogBrand} onChange={(event) => setCatalogBrand(event.target.value as typeof catalogBrand)}>
-              {catalogBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
-            </select>
-          </label>
-          <label>
-            Capsule system
-            <select value={catalogSystem} onChange={(event) => setCatalogSystem(event.target.value as typeof catalogSystem)}>
-              {catalogSystems.map((system) => <option key={system} value={system}>{system}</option>)}
-            </select>
-          </label>
-          <label>
-            Search products
-            <input value={catalogSearch} placeholder="decaf, melozio, k-cup..." onChange={(event) => setCatalogSearch(event.target.value)} />
-          </label>
-          <label>
-            Capsule product
-            <select value={catalogId} onChange={(event) => setCatalogId(event.target.value)}>
-              {filteredCatalog.map((coffee) => (
-                <option key={coffee.id} value={coffee.id}>
-                  {coffee.name} · {coffee.caffeineMg} mg · {coffee.doseGroup}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selectedCoffee ? (
-            <p className="fine-print">
-              {selectedCoffee.brand} {selectedCoffee.system} · {selectedCoffee.sizeLabel}, {selectedCoffee.servingMl} ml · {doseGroupLabel(selectedCoffee)}.
-              {' '}{selectedCoffee.marketNote} {selectedCoffee.sourceNote}
-            </p>
-          ) : null}
-          <label>
-            Override caffeine (mg)
+          <label className="settings-row">
+            취침 시각
             <input
-              type="number"
-              min="1"
-              placeholder={selectedCoffee ? String(selectedCoffee.caffeineMg) : '120'}
-              value={caffeineOverrideMg}
-              onChange={(event) => setCaffeineOverrideMg(event.target.value)}
+              aria-label="취침 시각"
+              type="time"
+              value={clock}
+              onChange={(event) => setBedtimeClock(event.target.value)}
             />
           </label>
-          <button type="button" onClick={handleAddCatalog}>Add selected capsule</button>
-
-          <div className="divider" />
-          <label>
-            Manual label
-            <input value={manualLabel} maxLength={80} onChange={(event) => setManualLabel(event.target.value)} />
+          <label className="settings-row">
+            참고선
+            <input
+              aria-label="참고선"
+              type="number"
+              min="0.1"
+              step="0.1"
+              value={reference}
+              onChange={(event) => {
+                const referenceLineMgPerL = parsePositiveNumber(event.target.value);
+                if (referenceLineMgPerL && referenceLineMgPerL <= 10) {
+                  setState((current) => updateSleepSettings(current, { referenceLineMgPerL, referenceLineManual: true }));
+                }
+              }}
+            />
           </label>
-          <label>
-            Manual caffeine (mg)
-            <input type="number" min="1" value={manualMg} onChange={(event) => setManualMg(event.target.value)} />
-          </label>
-          <button type="button" className="secondary-button" onClick={handleAddManual}>Add manual coffee</button>
-        </form>
-
-        <section className="foundation-card result-panel" aria-label="Scenario summary">
-          <h2>Scenarios & sleep planning</h2>
-          <p className="fine-print">{SHARE_LABEL_PRIVACY_WARNING}</p>
-          <div className="hero-actions" aria-label="Scenario actions">
-            <button type="button" className="secondary-button" onClick={() => setState((current) => copyScenario(current, 'scenario-1', 'scenario-2'))}>Copy Scenario 1 to Scenario 2</button>
-            <button type="button" className="ghost-button" onClick={() => setState((current) => clearScenario(current, 'scenario-2'))}>Clear Scenario 2</button>
-          </div>
-          {state.scenarios.map((scenario) => (
-            <section key={scenario.id} aria-label={scenario.name}>
-              <h3>{scenario.name}</h3>
-              {scenario.intakes.length === 0 ? (
-                <p>No caffeine intakes yet.</p>
-              ) : (
-                <ul className="intake-list">
-                  {scenario.intakes.map((intake) => (
-                    <li key={intake.id}>
-                      <span>{intake.label}</span>
-                      <strong>{intake.caffeineMg} mg</strong>
-                      <time>{new Date(intake.consumedAt).toLocaleString()}</time>
-                      <button type="button" className="ghost-button" onClick={() => setState((current) => removeIntake(current, scenario.id, intake.id))}>
-                        Remove
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ))}
-          <label className="inline-control">
-            Bedtime marker
-            <input type="datetime-local" value={toLocalInputValue(new Date(state.sleep.bedtime))} onChange={(event) => updateSelectedScenario((current) => updateSleepSettings(current, { bedtime: fromLocalInputValue(event.target.value).toISOString() }))} />
-          </label>
-          <label className="inline-control">
-            Custom reference line (mg/L)
-            <input type="number" min="0.1" step="0.1" value={referenceLine} onChange={(event) => {
-              const referenceLineMgPerL = parsePositiveNumber(event.target.value);
-              if (referenceLineMgPerL) setState((current) => updateSleepSettings(current, { referenceLineMgPerL }));
-            }} />
-          </label>
-          <p className="fine-print">
-            The reference line is an adjustable planning marker for comparing bedtime residuals, not medical advice or a
-            universal sleep cutoff.
-          </p>
-          <div className="metric-row">
-            <span>At bedtime · Scenario 1</span>
-            <strong>{bedtimeResiduals[0]?.concentrationMgPerL.toFixed(2) ?? '0.00'} mg/L</strong>
-          </div>
-          <div className="metric-row">
-            <span>At bedtime · Scenario 2</span>
-            <strong>{bedtimeResiduals[1]?.concentrationMgPerL.toFixed(2) ?? '0.00'} mg/L</strong>
-          </div>
-          <div className="metric-row">
-            <span>Time since last caffeine at bedtime</span>
-            <strong>{formatDuration(minutesSinceLastCaffeineAtBedtime)}</strong>
-          </div>
-          <button type="button" onClick={handleShare}>Create local share link</button>
-          <button type="button" className="ghost-button" onClick={handleReset}>Reset</button>
-          {shareUrl ? <textarea readOnly aria-label="Share URL" value={shareUrl} /> : null}
+          <p className="hint">민감도는 반감기가 아니라 참고선을 바꿉니다. 참고선을 직접 고치면 그 값을 유지합니다.</p>
         </section>
+      ) : null}
+
+      <p className="reference-note">스타벅스 Tall 기준 참고값 · 용량은 참고값입니다.</p>
+      <div className="chips" aria-label="한 번에 기록">
+        {DRINK_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            className="chip"
+            aria-label={`${preset.label} ${preset.caffeineMg} mg`}
+            aria-pressed={lastPresetId === preset.id}
+            onClick={() => addPreset(preset.id, preset.label, preset.caffeineMg)}
+          >
+            <DrinkMark id={preset.id} />
+            <span className="chip-text">
+              <span className="chip-name">{preset.label}</span>
+              <span className="chip-mg"> {preset.caffeineMg} mg</span>
+            </span>
+          </button>
+        ))}
+        <button type="button" className="chip" aria-pressed={customOpen} aria-expanded={customOpen} onClick={() => setCustomOpen((open) => !open)}>
+          <DrinkMark id="custom" />
+          <span className="chip-text">
+            <span className="chip-name">직접 입력</span>
+          </span>
+        </button>
+      </div>
+
+      {customOpen ? (
+        <form
+          className="custom-entry"
+          onSubmit={(event) => {
+            event.preventDefault();
+            addCustom();
+          }}
+        >
+          <label>
+            이름 (선택)
+            <input value={customName} maxLength={80} placeholder="예: 디카페인" onChange={(event) => setCustomName(event.target.value)} />
+          </label>
+          <label>
+            카페인 (mg)
+            <input type="number" min="1" inputMode="decimal" value={customMg} onChange={(event) => setCustomMg(event.target.value)} />
+          </label>
+          <button type="submit" className="solid-button">추가</button>
+        </form>
+      ) : null}
+
+      <div className="time-row">
+        <label className="time-field">
+          시각
+          <input
+            type="datetime-local"
+            value={toLocalInputValue(consumedAt)}
+            onChange={(event) => setConsumedAt(fromLocalInputValue(event.target.value))}
+          />
+        </label>
+        {nearNow ? <strong className="now-flag">지금</strong> : null}
+        <button type="button" className="time-shift" onClick={() => shiftTime(-30)}>−30분</button>
+        <button type="button" className="time-shift" onClick={() => shiftTime(-15)}>−15분</button>
+        <button type="button" className="time-shift" onClick={() => shiftTime(15)}>+15분</button>
+      </div>
+
+      {notice ? <p className="notice" role="status">{notice}</p> : null}
+
+      <section className="summary" aria-label="요약">
+        <article className="summary-card summary-hero" aria-label="현재 체내 농도">
+          <p>현재 체내 농도</p>
+          <strong>{currentMg === null ? '기록 없음' : formatConcentration(currentMg)}</strong>
+          {currentMg !== null && currentMg < 0.05 ? <span className="hint">방금 마신 양은 아직 거의 흡수되지 않았습니다.</span> : null}
+        </article>
+        <article className="summary-card" aria-label="참고선 아래">
+          <p>참고선 {reference.toFixed(1)} mg/L 아래</p>
+          <strong>{dropText}</strong>
+        </article>
+        <article className={`summary-card summary-verdict${verdict === '주의' ? ' caution' : ''}`} aria-label="취침 판정">
+          <p>취침 {clock}</p>
+          <strong>{verdict ? `취침 ${clock}이면 ${verdict}` : '기록 없음'}</strong>
+          {bedtimeMg !== null ? <span className="hint">취침 때 약 {bedtimeMg.toFixed(1)} mg/L</span> : null}
+        </article>
+      </section>
+      <p className="reference-caption">참고선은 보수적으로 잡은 값입니다</p>
+
+      <ul className="dose-list" aria-label="오늘 기록">
+        {listed.length === 0 ? <li className="empty">아직 기록이 없습니다.</li> : listed.map((intake) => (
+          <li key={intake.id}>
+            <span>{formatKoreanWhen(new Date(intake.consumedAt), now)} {intake.label}</span>
+            <span>
+              {intake.caffeineMg} mg
+              {' · '}
+              <button type="button" className="delete-button" onClick={() => setState((current) => removeIntake(current, log.id, intake.id))}>
+                지우기
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <CaffeineGraph series={graphSeries} bedtime={bedtime} referenceLineMgPerL={reference} doses={doses} />
+
+      <section className="disclosure">
+        <button type="button" className="quiet-button" aria-expanded={capsulesOpen} onClick={() => setCapsulesOpen((open) => !open)}>
+          캡슐 더보기
+        </button>
+        {capsulesOpen ? (
+          <form
+            className="capsule-fields"
+            aria-label="캡슐 더보기"
+            onSubmit={(event) => {
+              event.preventDefault();
+              addCapsule();
+            }}
+          >
+            <label>
+              회사
+              <select value={catalogBrand} onChange={(event) => setCatalogBrand(event.target.value as typeof catalogBrand)}>
+                {catalogBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+              </select>
+            </label>
+            <label>
+              캡슐 시스템
+              <select value={catalogSystem} onChange={(event) => setCatalogSystem(event.target.value as typeof catalogSystem)}>
+                {catalogSystems.map((system) => <option key={system} value={system}>{system}</option>)}
+              </select>
+            </label>
+            <label>
+              제품 검색
+              <input value={catalogSearch} placeholder="디카페인, 멜로지오" onChange={(event) => setCatalogSearch(event.target.value)} />
+            </label>
+            <label>
+              제품
+              <select value={catalogId} onChange={(event) => setCatalogId(event.target.value)}>
+                {filteredCatalog.map((coffee) => (
+                  <option key={coffee.id} value={coffee.id}>
+                    {coffee.name} · {coffee.caffeineMg} mg · {doseGroupKorean(coffee.doseGroup)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="hint">캡슐 용량도 참고값입니다. 시장과 배치에 따라 달라질 수 있습니다.</p>
+            <button type="submit" className="solid-button">이 캡슐 추가</button>
+          </form>
+        ) : null}
       </section>
 
-      <CaffeineGraph series={graphSeries} bedtime={bedtime} referenceLineMgPerL={referenceLine} />
-
-      <aside className="assumption-panel">
-        <h2>Model framing</h2>
-        <p>{simulations[0]?.disclaimer}</p>
-        <ul>
-          {simulations[0]?.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}
-        </ul>
-      </aside>
+      <p className="disclaimer">{NON_MEDICAL_DISCLAIMER}</p>
     </main>
   );
 }

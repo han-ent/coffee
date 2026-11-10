@@ -1,96 +1,142 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { App } from './App';
+import { STORAGE_KEY } from './state';
 
-describe('App shell', () => {
-  it('renders the G001/G002 planner surface with privacy and explicit scenario affordances', () => {
-    render(<App />);
-
-    expect(screen.getByRole('heading', { name: /compare coffee timing/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /balanced profile/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /add coffee/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /scenarios & sleep planning/i })).toBeInTheDocument();
-    expect(screen.getByText(/share links include only calculation essentials/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/not medical advice/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/adjustable planning marker/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /add manual coffee/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Company/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Capsule system/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Capsule product/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /add selected capsule/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Weight \(kg\)/i)).toHaveAttribute('list', 'weight-suggestions-kg');
-    expect(screen.getByRole('radio', { name: /scenario 1/i })).toBeChecked();
-    expect(screen.getByRole('radio', { name: /scenario 2/i })).toBeInTheDocument();
-    expect(screen.getByText(/Add coffee to Scenario 1/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/reference line/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/sleep target/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/bedtime/i).length).toBeGreaterThan(0);
+describe('카페인 타이머', () => {
+  beforeEach(() => {
+    localStorage.clear();
   });
 
-  it('adds new intakes only to the selected scenario while keeping both graph series visible', () => {
+  it('shows Korean one-tap presets above the time field, with settings and capsules collapsed', () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('radio', { name: /scenario 2/i }));
-    fireEvent.change(screen.getByLabelText(/Manual label/i), { target: { value: 'Scenario two espresso' } });
-    fireEvent.change(screen.getByLabelText(/Manual caffeine \(mg\)/i), { target: { value: '95' } });
-    fireEvent.click(screen.getByRole('button', { name: /add manual coffee/i }));
+    expect(screen.getByRole('heading', { name: '카페인 타이머' })).toBeInTheDocument();
+    expect(screen.getByText(/용량은 참고값입니다/)).toBeInTheDocument();
+    expect(screen.getByText(/교육용 추정치이며 의학적 조언이 아닙니다/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /아메리카노 톨 150 mg/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /아메리카노 그란데 225 mg/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /에스프레소 1샷 75 mg/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /콜드브루 155 mg/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /카페라테 75 mg/ })).toBeInTheDocument();
+    expect(screen.getByText('스타벅스 Tall 기준 참고값 · 용량은 참고값입니다.')).toBeInTheDocument();
+    expect(screen.getByText('참고선은 보수적으로 잡은 값입니다')).toBeInTheDocument();
+    expect(screen.getByText(/약물·간질환·임신/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /에너지드링크 80 mg/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /녹차 30 mg/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '직접 입력' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('취침 시각')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('시각')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /시간에 따른 카페인 농도/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /공유|Reset|시나리오 2|Scenario 2/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('회사')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('체중')).not.toBeInTheDocument();
 
-    expect(screen.getByRole('status')).toHaveTextContent(/added to Scenario 2/i);
-    const scenarioOne = screen.getByRole('region', { name: 'Scenario 1' });
-    const scenarioTwo = screen.getByRole('region', { name: 'Scenario 2' });
-    expect(within(scenarioOne).queryByText('Scenario two espresso')).not.toBeInTheDocument();
-    expect(within(scenarioTwo).getByText('Scenario two espresso')).toBeInTheDocument();
-    expect(within(scenarioTwo).getByText('95 mg')).toBeInTheDocument();
-    expect(screen.getByText(/Add coffee to Scenario 2/i)).toBeInTheDocument();
-    expect(screen.getByText(/Time since last caffeine at bedtime/i).parentElement).toHaveTextContent(/h/);
-    expect(screen.getByText(/Time since last caffeine at bedtime/i).parentElement).not.toHaveTextContent(/No caffeine yet/i);
-    expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);
+    const preset = screen.getByRole('button', { name: /아메리카노 톨/ });
+    const time = screen.getByLabelText('시각');
+    expect(preset.compareDocumentPosition(time) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('guards out-of-range weight edits instead of crashing the simulation render', () => {
+  it('records a preset with one tap and removes it from the list', async () => {
     render(<App />);
 
-    const weightInput = screen.getByLabelText(/Weight \(kg\)/i);
-    fireEvent.change(weightInput, { target: { value: '251' } });
-    fireEvent.blur(weightInput);
+    expect(screen.getByRole('article', { name: '현재 체내 농도' })).toHaveTextContent('기록 없음');
+    fireEvent.click(screen.getByRole('button', { name: /아메리카노 톨 150 mg/ }));
 
-    expect(screen.getByRole('status')).toHaveTextContent(/between 25 and 250 kg/i);
-    expect(screen.getByRole('img', { name: /caffeine concentration over time/i })).toBeInTheDocument();
+    const list = screen.getByRole('list', { name: '오늘 기록' });
+    expect(list).toHaveTextContent('아메리카노 톨');
+    expect(list).toHaveTextContent('150 mg');
+    expect(screen.getByRole('article', { name: '현재 체내 농도' })).toHaveTextContent(/mg\/L/);
+    expect(screen.getByRole('article', { name: '참고선 아래' })).not.toHaveTextContent('기록 없음');
+    expect(screen.getByRole('article', { name: '취침 판정' })).toHaveTextContent(/취침 23:00이면 (여유 있음|주의)/);
+    expect(screen.getByRole('img', { name: /섭취 표시 아메리카노 톨/ })).toBeInTheDocument();
+
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toContain('아메리카노 톨'));
+
+    fireEvent.click(within(list).getByRole('button', { name: '지우기' }));
+    expect(screen.getByRole('list', { name: '오늘 기록' })).toHaveTextContent('아직 기록이 없습니다');
+    expect(screen.getByRole('article', { name: '현재 체내 농도' })).toHaveTextContent('기록 없음');
   });
 
-  it('does not change graph series when editing the selected-product draft', () => {
+  it('shifts the selected time by the quick buttons before recording', () => {
     render(<App />);
 
-    expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/With Melozio Boost/i)).not.toBeInTheDocument();
+    const time = screen.getByLabelText('시각') as HTMLInputElement;
+    const before = new Date(time.value).getTime();
+    fireEvent.click(screen.getByRole('button', { name: '−15분' }));
+    const after = new Date((screen.getByLabelText('시각') as HTMLInputElement).value).getTime();
 
-    fireEvent.change(screen.getByLabelText(/Override caffeine \(mg\)/i), { target: { value: '150' } });
-
-    expect(screen.queryByText(/With Melozio Boost/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Scenario 1/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Scenario 2/i).length).toBeGreaterThan(0);
+    expect(after - before).toBe(-15 * 60_000);
+    fireEvent.click(screen.getByRole('button', { name: /에스프레소 1샷/ }));
+    expect(screen.getByRole('list', { name: '오늘 기록' })).toHaveTextContent('에스프레소 1샷');
+    expect(screen.getByRole('list', { name: '오늘 기록' })).toHaveTextContent('75 mg');
   });
 
-  it('filters curated capsules by company, system, and search while preserving manual override', async () => {
+  it('adds a custom dose only after a positive amount is entered', () => {
     render(<App />);
 
-    fireEvent.change(screen.getByLabelText(/Company/i), { target: { value: 'Nespresso' } });
-    fireEvent.change(screen.getByLabelText(/Capsule system/i), { target: { value: 'Original' } });
-    fireEvent.change(screen.getByLabelText(/Search products/i), { target: { value: 'decaf' } });
+    fireEvent.click(screen.getByRole('button', { name: '직접 입력' }));
+    fireEvent.click(screen.getByRole('button', { name: '추가' }));
+    expect(screen.getByRole('status')).toHaveTextContent(/카페인 mg/);
+    expect(screen.getByRole('list', { name: '오늘 기록' })).toHaveTextContent('아직 기록이 없습니다');
 
-    expect(screen.getByLabelText(/Capsule product/i)).toHaveTextContent(/Decaffeinato/i);
-    await waitFor(() => expect(screen.getByText(/Nespresso Original/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '집 커피' } });
+    fireEvent.change(screen.getByLabelText(/카페인 \(mg\)/), { target: { value: '90' } });
+    fireEvent.click(screen.getByRole('button', { name: '추가' }));
 
-    fireEvent.change(screen.getByLabelText(/Override caffeine \(mg\)/i), { target: { value: '5' } });
-    fireEvent.click(screen.getByRole('button', { name: /add selected capsule/i }));
+    expect(screen.getByRole('list', { name: '오늘 기록' })).toHaveTextContent('집 커피');
+    expect(screen.getByRole('list', { name: '오늘 기록' })).toHaveTextContent('90 mg');
+  });
 
-    expect(screen.getByRole('status')).toHaveTextContent(/added to Scenario 1/i);
-    expect(screen.getByRole('region', { name: 'Scenario 1' })).toHaveTextContent('5 mg');
+  it('keeps profile defaults in 설정 and rejects an out-of-range weight without dropping the graph', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '설정' }));
+    const weight = screen.getByLabelText('체중');
+    expect(weight).toHaveValue('70');
+    expect(screen.getByLabelText('민감도')).toHaveValue('typical');
+    expect(screen.getByLabelText('흡연')).toHaveValue('non-smoker');
+    expect(screen.getByLabelText('임신·산후')).toHaveValue('not-pregnant');
+    expect(screen.getByLabelText('취침 시각')).toHaveValue('23:00');
+    expect(screen.getByLabelText('참고선')).toHaveValue(0.7);
+
+    fireEvent.change(weight, { target: { value: '62' } });
+    fireEvent.blur(weight);
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toContain('"weightKg":62'));
+
+    cleanup();
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '설정' }));
+    expect(screen.getByLabelText('체중')).toHaveValue('62');
+
+    fireEvent.change(screen.getByLabelText('체중'), { target: { value: '251' } });
+    fireEvent.blur(screen.getByLabelText('체중'));
+    expect(screen.getByRole('status')).toHaveTextContent(/25–250 kg/);
+    expect(screen.getByLabelText('체중')).toHaveValue('62');
+    expect(screen.getByRole('img', { name: /시간에 따른 카페인 농도/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('민감도'), { target: { value: 'high' } });
+    expect(screen.getByLabelText('참고선')).toHaveValue(0.5);
+    fireEvent.change(screen.getByLabelText('참고선'), { target: { value: '0.8' } });
+    fireEvent.change(screen.getByLabelText('민감도'), { target: { value: 'low' } });
+    expect(screen.getByLabelText('참고선')).toHaveValue(0.8);
+    expect(screen.getByText(/참고선을 직접 고치면 그 값을 유지합니다/)).toBeInTheDocument();
+  });
+
+  it('adds a curated capsule from the collapsed Korean picker', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '캡슐 더보기' }));
+    fireEvent.change(screen.getByLabelText('회사'), { target: { value: 'Nespresso' } });
+    fireEvent.change(screen.getByLabelText('캡슐 시스템'), { target: { value: 'Original' } });
+    fireEvent.change(screen.getByLabelText('제품 검색'), { target: { value: '디카페인' } });
+
+    await waitFor(() => expect(screen.getByLabelText('제품')).toHaveTextContent(/Decaffeinato/));
+    fireEvent.click(screen.getByRole('button', { name: '이 캡슐 추가' }));
+
+    const list = screen.getByRole('list', { name: '오늘 기록' });
+    expect(list).toHaveTextContent(/Decaffeinato|Volluto|Ristretto/);
+    expect(list).toHaveTextContent('mg');
+    expect(screen.queryByText(/Scenario 1/)).not.toBeInTheDocument();
   });
 });

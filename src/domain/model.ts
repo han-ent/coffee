@@ -1,7 +1,14 @@
 export type Sex = 'unspecified' | 'female' | 'male';
 export type CaffeineSensitivity = 'low' | 'typical' | 'high';
 export type SmokingStatus = 'non-smoker' | 'smoker';
-export type PregnancyStatus = 'not-pregnant' | 'pregnant-or-postpartum' | 'unspecified';
+export type PregnancyStatus =
+  | 'not-pregnant'
+  | 'unspecified'
+  | 'pregnant-or-postpartum'
+  | 'first-trimester'
+  | 'second-trimester'
+  | 'third-trimester'
+  | 'postpartum-12-weeks';
 
 export interface PersonProfile {
   id?: string;
@@ -93,12 +100,12 @@ export interface SimulationResult {
 }
 
 export const NON_MEDICAL_DISCLAIMER =
-  'This caffeine curve is an educational planning estimate, not medical advice, diagnosis, or treatment. Individual metabolism can vary widely; use manual overrides and consult a clinician for health-specific questions.';
+  '교육용 추정치이며 의학적 조언이 아닙니다. 약물·간질환·임신 등에 따라 실제와 크게 다를 수 있어요.';
 
 export const DEFAULT_PK_PARAMETERS: PharmacokineticParameters = {
   halfLifeMinutes: 300,
-  absorptionHalfLifeMinutes: 35,
-  volumeDistributionLPerKg: 0.6,
+  absorptionHalfLifeMinutes: 12,
+  volumeDistributionLPerKg: 0.7,
   bioavailability: 1,
 };
 
